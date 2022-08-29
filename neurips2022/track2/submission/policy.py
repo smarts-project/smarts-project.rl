@@ -5,12 +5,13 @@ import numpy as np
 import math
 import pickle
 import torch
+asdf
 from torchvision import transforms
 try:
     from submission.model_IL import MainNet
 except:
     from model_IL import MainNet
-    
+
 data_transform = transforms.Compose(
     [
         transforms.ToPILImage(),
