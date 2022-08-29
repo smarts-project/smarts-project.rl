@@ -5,7 +5,6 @@ import numpy as np
 import math
 import pickle
 import torch
-asdf
 from torchvision import transforms
 try:
     from submission.model_IL import MainNet
