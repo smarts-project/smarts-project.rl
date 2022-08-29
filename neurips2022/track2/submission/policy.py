@@ -6,8 +6,11 @@ import math
 import pickle
 import torch
 from torchvision import transforms
-from model_IL import MainNet
-
+try:
+    from submission.model_IL import MainNet
+except:
+    from model_IL import MainNet
+    
 data_transform = transforms.Compose(
     [
         transforms.ToPILImage(),
