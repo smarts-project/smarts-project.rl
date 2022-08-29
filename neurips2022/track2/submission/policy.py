@@ -5,11 +5,9 @@ import numpy as np
 import math
 import pickle
 import torch
+import sys
 from torchvision import transforms
-try:
-    from submission.model_IL import MainNet
-except:
-    from model_IL import MainNet
+from submission.model_IL import MainNet
 
 data_transform = transforms.Compose(
     [
