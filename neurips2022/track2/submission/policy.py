@@ -5,8 +5,9 @@ import numpy as np
 import math
 import pickle
 import torch
+import sys
 from torchvision import transforms
-from model_IL import MainNet
+from submission.model_IL import MainNet
 
 data_transform = transforms.Compose(
     [
@@ -57,10 +58,8 @@ def rotate_points_for_encode(x, y, heading):
 class BasePolicy:
     def act(self, obs: Dict[str, Any]):
         """Act function to be implemented by user.
-
         Args:
             obs (Dict[str, Any]): A dictionary of observation for each ego agent step.
-
         Returns:
             Dict[str, Any]: A dictionary of actions for each ego agent.
         """
@@ -71,7 +70,6 @@ def submitted_wrappers():
     """Return environment wrappers for wrapping the evaluation environment.
     Each wrapper is of the form: Callable[[env], env]. Use of wrappers is
     optional. If wrappers are not used, return empty list [].
-
     Returns:
         List[wrappers]: List of wrappers. Default is empty list [].
     """
@@ -103,10 +101,8 @@ class Policy(BasePolicy):
 
     def act(self, obs: Dict[str, Any]):
         """Act function to be implemented by user.
-
         Args:
             obs (Dict[str, Any]): A dictionary of observation for each ego agent step.
-
         Returns:
             Dict[str, Any]: A dictionary of actions for each ego agent.
         """

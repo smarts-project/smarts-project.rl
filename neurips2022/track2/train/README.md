@@ -6,11 +6,11 @@
 ## Setup
 + Use `python3.8` to develop your model.
     ```bash
-    $ cd <path>/SMARTS/competition/track2/train
+    $ cd <path>/track2
     $ python3.8 -m venv ./.venv
     $ source ./.venv/bin/activate
     $ pip install --upgrade pip
-    $ pip install -e .
+    $ pip install -e ./train
     ```
 
 ## Notes on the used Observation, Action, and Reward
@@ -18,7 +18,7 @@
 + Actions: The action space (output of the policy) is using dx, dy and dh, which are the value change per step in x, y direction and heading for the ego vehicle in its birds eye view image coordinate. dh is normalized by multiplying the values by 100. Since dx and dy can not be directly obtained from smarts observation, we have to get displacement change in global coordinate first and use a rotation matrix w.r.t the heading to get dx, dy. In evaluation, the values of predicted dh need to be divided by 100.
 + Rewards: The reward use the default reward in SMARTS which is the distance travelled per step plus an extra reward for reaching the goal. Since there is not a "goal" concept in the training set, we use the last point of each trajectory as the goal position for training. 
 
-## Train
+## Train locally
 1. Train
     ```bash
     $ python3.8 train.py --dataset_path <path_to_data> \
@@ -30,3 +30,13 @@
                         [--num_epochs] 100 \
     ```
 1. First time running `train.py`, please set `cache=False`, the processed data will be saved to `./output/dataset.npy`. For later use, set `cache=True` and it will use the cached dataset.
+
+## Evaluate and visualize a trained model
+1. A trained model is assumed to be available in the `track2/submission` folder. 
+    + This would be true if the training steps above had been executed previously, as a model would be saved to the `track2/submission` folder at the end of the training. 
+1. Execute the following to evaluate a trained model.
+    ```bash
+    $ cd <path>/track2
+    $ python3.8 train/evaluate.py
+    ```
+    A SUMO GUI will automatically pop up to visualize the evaluation.
