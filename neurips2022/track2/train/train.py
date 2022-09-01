@@ -4,14 +4,19 @@
 import os
 import argparse
 import matplotlib.pyplot as plt
-
+import sys
 import torch
-import torch.nn as nn
-from torchvision import transforms
 import torch.optim as optim
+from pathlib import Path
 from torch.utils.data import Dataset
+from torchvision import transforms
 
+# To import submission folder
+sys.path.insert(0, str(Path(__file__).parents[1]))
+
+from submission.model_IL import MainNet
 from utility_IL import load_data
+
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -60,125 +65,6 @@ def create_datasets(dataset_path, save_path=None, cache=False, batch_size=32):
     return train_loader
 
 
-class Flatten(nn.Module):
-    def forward(self, x):
-
-        return x.view(x.size()[0], -1)
-
-
-class ConvBlock(nn.Module):
-    def __init__(self):
-        super(ConvBlock, self).__init__()
-
-        self.conv1 = torch.nn.Conv2d(3, 32, 4, 4)
-        self.bachnorm1 = torch.nn.BatchNorm2d(32)
-        self.elu = torch.nn.ELU()
-        self.dropout2d = torch.nn.Dropout2d(0.5)
-        self.conv2 = torch.nn.Conv2d(32, 64, 2, 2)
-        self.batchnorm2 = torch.nn.BatchNorm2d(64)
-        self.conv3 = torch.nn.Conv2d(64, 64, 4, 4)
-        self.flatten = Flatten()
-        self.batchnorm3 = torch.nn.BatchNorm1d(64 * 8 * 8)
-        self.dropout = torch.nn.Dropout()
-        self.linear1 = torch.nn.Linear(64 * 8 * 8, 128)
-        self.batchnorm4 = torch.nn.BatchNorm1d(128)
-        self.linear2 = torch.nn.Linear(128, 32)
-
-    def forward(self, x):
-        x = self.conv1(x)
-        x = self.bachnorm1(x)
-        x = self.elu(x)
-        x = self.dropout2d(x)
-
-        x = self.conv2(x)
-        x = self.batchnorm2(x)
-        x = self.elu(x)
-        x = self.dropout2d(x)
-
-        x = self.conv3(x)
-        x = self.elu(x)
-        x = self.flatten(x)
-        x = self.batchnorm3(x)
-        x = self.dropout(x)
-
-        x = self.linear1(x)
-        x = self.elu(x)
-        x = self.batchnorm4(x)
-        x = self.dropout(x)
-
-        x = self.linear2(x)
-        x = self.elu(x)
-
-        return x
-
-
-class EmbBlock(nn.Module):
-    def __init__(self):
-        super(EmbBlock, self).__init__()
-
-        self.linear1 = torch.nn.Linear(2, 32)
-        self.elu = torch.nn.ELU()
-
-    def forward(self, x):
-        x = self.linear1(x.float())
-        x = self.elu(x)
-
-        return x
-
-
-class MainNet(nn.Module):
-    def __init__(self):
-        super(MainNet, self).__init__()
-        self.convblock = ConvBlock()
-        self.embblock = EmbBlock()
-
-        self.linear1 = torch.nn.Linear(64, 32)
-        self.linear4 = torch.nn.Linear(32, 1)
-        self.linear2 = torch.nn.Linear(64, 32)
-        self.linear5 = torch.nn.Linear(32, 1)
-        self.linear3 = torch.nn.Linear(64, 32)
-        self.linear6 = torch.nn.Linear(32, 1)
-
-        self.elu = torch.nn.ELU()
-
-        self.criterion = nn.MSELoss()
-
-    def forward(self, x):
-        img_emb = self.convblock(x[0])
-        goal_emb = self.embblock(x[1])
-
-        x = torch.cat((img_emb, goal_emb), dim=1)
-
-        dx = self.linear1(x)
-        dy = self.linear2(x)
-        dheading = self.linear3(x)
-
-        dx = self.elu(dx)
-        dy = self.elu(dy)
-        dheading = self.elu(dheading)
-
-        nn_outputs = {}
-        nn_outputs["dx"] = self.linear4(dx)
-        nn_outputs["dy"] = self.linear5(dy)
-        nn_outputs["d_heading"] = self.linear6(dheading)
-
-        return nn_outputs
-
-    def compute_loss(self, nn_outputs, labels):
-        dx_loss = self.criterion(
-            nn_outputs["dx"], labels[:, 0].view(labels.shape[0], 1)
-        )
-        dy_loss = self.criterion(
-            nn_outputs["dy"], labels[:, 1].view(labels.shape[0], 1)
-        )
-        dh_loss = self.criterion(
-            nn_outputs["d_heading"], labels[:, 2].view(labels.shape[0], 1)
-        )
-        total_loss = dx_loss + dy_loss + dh_loss
-
-        return total_loss, dx_loss, dy_loss, dh_loss
-
-
 def save_losses(
     train_total_losses,
     train_total_loss,
@@ -222,24 +108,28 @@ def train(
     save_steps=30,
 ):
     """
-    Training main method
+    Train method
     :param model: the network
     """
-    # import pdb; pdb.set_trace()
     model = model.to(device)
 
     train_total_losses, train_dx_losses, train_dy_losses = ([], [], [])
     test_total_losses, test_dx_losses, test_dy_losses = ([], [], [])
     epochs = []
 
-    loss_function = nn.MSELoss(reduction="mean")
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
+    # Read datasets
     train_loader = create_datasets(
         dataset_path, save_path=checkpoint_path, cache=cache, batch_size=batch_size
-    )  # read datasets
+    )
 
-    # train
+    # Setup log dir
+    log_dir = Path(__file__).absolute().parents[0] / "logs"
+    if not os.path.isdir(log_dir):
+        os.mkdir(log_dir)
+
+    # Train
     save_step = 0
 
     for epoch in range(num_epochs):
@@ -247,7 +137,7 @@ def train(
         print("Epoch {}/{}".format(epoch + 1, num_epochs))
         epochs.append(epoch)
         train_total_loss, train_dx_loss, train_dy_loss = train_epoch(
-            model, loss_function, optimizer, train_loader
+            model, optimizer, train_loader
         )
         test_total_loss = 0
         test_dx_loss = 0
@@ -279,7 +169,7 @@ def train(
         plt.xlabel("Epoch")
         plt.ylabel("Loss")
         plt.title("Train Loss")
-        plt.savefig("train_losses")
+        plt.savefig(log_dir / "losses.png")
         plt.clf()
 
         # save model
@@ -306,7 +196,7 @@ def train(
     )
 
 
-def train_epoch(model, loss_function, optimizer, data_loader):
+def train_epoch(model, optimizer, data_loader):
     """Train for a single epoch"""
     dx_losses = 0.0
     dy_losses = 0.0

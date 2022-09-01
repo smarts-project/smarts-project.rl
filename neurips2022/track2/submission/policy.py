@@ -1,13 +1,18 @@
+import math
+import numpy as np
+import os
+import pickle
+import sys
+import torch
 from typing import Any, Dict
 from pathlib import Path
-import os
-import numpy as np
-import math
-import pickle
-import torch
-import sys
 from torchvision import transforms
-from submission.model_IL import MainNet
+
+# To import submission folder
+sys.path.insert(0, str(Path(__file__).parents[0]))
+
+from model_IL import MainNet
+
 
 data_transform = transforms.Compose(
     [

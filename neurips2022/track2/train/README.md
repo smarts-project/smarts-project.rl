@@ -21,13 +21,15 @@
 ## Train locally
 1. Train
     ```bash
-    $ python3.8 train.py --dataset_path <path_to_data> \
-                        --output_path <path_to_saved_model> \
-                        [--cache] False \
-                        [--learning_rate] 0.001 \
-                        [--save_steps] 10 \
-                        [--batch_size] 32 \
-                        [--num_epochs] 100 \
+    $ cd <path>/track2
+    $ python3.8 train/train.py \
+        --dataset_path <path_to_data> \
+        --output_path <path_to_saved_model> \
+        [--cache] False \
+        [--learning_rate] 0.001 \
+        [--save_steps] 10 \
+        [--batch_size] 32 \
+        [--num_epochs] 100 \
     ```
 1. First time running `train.py`, please set `cache=False`, the processed data will be saved to `./output/dataset.npy`. For later use, set `cache=True` and it will use the cached dataset.
 
