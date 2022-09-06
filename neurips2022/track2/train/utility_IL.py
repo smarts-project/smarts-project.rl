@@ -64,7 +64,7 @@ def load_data_scratch(dataset_path, save_path):
 
         for id in vehicle_ids:
             with open(
-                os.path.join(path, scenario) + "/Agent-history-vehicle-" + id + ".pkl",
+                os.path.join(path, scenario) + "/sumo_sumo_1_Agent-history-vehicle-" + id + ".pkl",
                 "rb",
             ) as f:
                 vehicle_data = pickle.load(f)
@@ -86,11 +86,15 @@ def load_data_scratch(dataset_path, save_path):
                 last_sim_time = image_names[-1].split("_Agent")[0]
 
                 try:
-                    current_position = vehicle_data[float(sim_time)]["ego"]["pos"]
-                    next_position = vehicle_data[float(sim_time_next)]["ego"]["pos"]
-                    current_heading = vehicle_data[float(sim_time)]["ego"]["heading"]
-                    next_heading = vehicle_data[float(sim_time_next)]["ego"]["heading"]
-                    goal_location = vehicle_data[float(last_sim_time)]["ego"]["pos"]
+                    current_position = vehicle_data[float(sim_time)].ego_vehicle_state.position
+                    next_position = vehicle_data[float(sim_time_next)].ego_vehicle_state.position
+                    current_heading = vehicle_data[float(sim_time)].ego_vehicle_state.heading
+                    next_heading = vehicle_data[float(sim_time_next)].ego_vehicle_state.heading
+
+                    goal_x = vehicle_data[float(sim_time)].ego_vehicle_state.mission.goal.position.x
+                    goal_y = vehicle_data[float(sim_time)].ego_vehicle_state.mission.goal.position.y
+                    goal_z = vehicle_data[float(sim_time)].ego_vehicle_state.mission.goal.position.z
+                    goal_location = np.array([goal_x, goal_y, goal_z])
 
                 except:
                     print("scenario ", scenario)
