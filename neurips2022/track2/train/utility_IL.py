@@ -63,8 +63,13 @@ def load_data_scratch(dataset_path, save_path):
                     vehicle_ids.append(vehicle_id)
 
         for id in vehicle_ids:
+            for filename in os.listdir(os.path.join(path, scenario)):
+                match = re.search(r".*-{}\.pkl".format(id), filename)
+                if match is not None:
+                    pkl_file = match
+                    
             with open(
-                os.path.join(path, scenario) + "/sumo_sumo_1_Agent-history-vehicle-" + id + ".pkl",
+                os.path.join(path, scenario) + "/" + pkl_file.string,
                 "rb",
             ) as f:
                 vehicle_data = pickle.load(f)
