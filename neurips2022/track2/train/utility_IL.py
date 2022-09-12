@@ -86,11 +86,11 @@ def load_data_scratch(dataset_path, save_path):
                 last_sim_time = image_names[-1].split("_Agent")[0]
 
                 try:
-                    current_position = vehicle_data[float(sim_time)]["ego"]["pos"]
-                    next_position = vehicle_data[float(sim_time_next)]["ego"]["pos"]
-                    current_heading = vehicle_data[float(sim_time)]["ego"]["heading"]
-                    next_heading = vehicle_data[float(sim_time_next)]["ego"]["heading"]
-                    goal_location = vehicle_data[float(last_sim_time)]["ego"]["pos"]
+                    current_position = vehicle_data[float(sim_time)].ego_vehicle_state.position
+                    next_position = vehicle_data[float(sim_time_next)].ego_vehicle_state.position
+                    current_heading = vehicle_data[float(sim_time)].ego_vehicle_state.heading
+                    next_heading = vehicle_data[float(sim_time_next)].ego_vehicle_state.heading
+                    goal_location = vehicle_data[float(last_sim_time)].ego_vehicle_state.position
 
                 except:
                     print("scenario ", scenario)
