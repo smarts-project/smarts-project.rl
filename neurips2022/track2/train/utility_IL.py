@@ -53,7 +53,7 @@ def load_data_scratch(dataset_path, save_path):
         vehicle_ids = []
         for filename in os.listdir(os.path.join(path, scenario)):
             if filename.endswith(".png"):
-                match = re.search("vehicle-(.*).png", filename)
+                match = re.search("(\d*).png", filename)
                 if match is None:
                     raise ValueError(
                         f"Name matching does not match in filename: {filename}"
@@ -86,9 +86,12 @@ def load_data_scratch(dataset_path, save_path):
             for i in range(len(image_names) - 1):
                 image = Image.open(os.path.join(path, scenario) + "/" + image_names[i])
                 obs.append([np.moveaxis(np.asarray(image), -1, 0)])
-                sim_time = image_names[i].split("_Agent")[0]
-                sim_time_next = image_names[i + 1].split("_Agent")[0]
-                last_sim_time = image_names[-1].split("_Agent")[0]
+                match = re.search("(.*)_.*", image_names[i])
+                sim_time = match.group(1)
+                match = re.search("(.*)_.*", image_names[i+1])
+                sim_time_next = match.group(1)
+                match = re.search("(.*)_.*", image_names[-1])
+                last_sim_time = match.group(1)
 
                 try:
                     current_position = vehicle_data[float(sim_time)].ego_vehicle_state.position
