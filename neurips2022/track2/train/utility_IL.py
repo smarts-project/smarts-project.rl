@@ -53,7 +53,7 @@ def load_data_scratch(dataset_path, save_path):
         vehicle_ids = []
         for filename in os.listdir(os.path.join(path, scenario)):
             if filename.endswith(".png"):
-                match = re.search("(\d*).png", filename)
+                match = re.search(".*_(.*).png", filename)
                 if match is None:
                     raise ValueError(
                         f"Name matching does not match in filename: {filename}"
@@ -64,7 +64,7 @@ def load_data_scratch(dataset_path, save_path):
 
         for id in vehicle_ids:
             for filename in os.listdir(os.path.join(path, scenario)):
-                match = re.search(r".*-{}\.pkl".format(id), filename)
+                match = re.search(r"{}\.pkl".format(id), filename)
                 if match is not None:
                     pkl_file = match
                     
@@ -77,7 +77,7 @@ def load_data_scratch(dataset_path, save_path):
             image_names = []
 
             for filename in os.listdir(os.path.join(path, scenario)):
-                if filename.endswith("-" + id + ".png"):
+                if filename.endswith("_" + id + ".png"):
                     image_names.append(filename)
 
             image_names = sorted(image_names)
