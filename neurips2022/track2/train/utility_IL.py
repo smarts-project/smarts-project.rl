@@ -1,18 +1,16 @@
-import pickle
+import math
 import numpy as np
 import os
-from PIL import Image
+import pickle
 import re
 import torch
-import math
+from PIL import Image
 from sklearn.preprocessing import MinMaxScaler
-from pickle import dump
 
 torch.cuda.empty_cache()
 
 
 def dheading(heading_l, heading_2):
-
     return (heading_l - heading_2 + math.pi) % (2 * math.pi) - math.pi
 
 
@@ -39,63 +37,45 @@ def load_from_npy(data_path):
 
 
 def load_data_scratch(dataset_path, save_path):
-    path = dataset_path
     obs = []
     actions = []
-    scenarios = []
+    regexp_agentid = re.compile(r".*_(.*).png")
+    regexp_time = re.compile(r"(.*)_.*")
 
-    for scenario_name in os.listdir(path):
-        scenarios.append(scenario_name)
-
-    x, y = rotate_points(1, 1, (-1 * math.pi / 4))
-
+    scenarios = os.listdir(dataset_path)
     for scenario in scenarios:
-        vehicle_ids = []
-        for filename in os.listdir(os.path.join(path, scenario)):
+        vehicles = set()
+        scen_dir = os.path.join(dataset_path, scenario)
+        for filename in os.listdir(scen_dir):
             if filename.endswith(".png"):
-                match = re.search("vehicle-(.*).png", filename)
-                if match is None:
-                    raise ValueError(
-                        f"Name matching does not match in filename: {filename}"
-                    )
-                vehicle_id = match.group(1)
-                if vehicle_id not in vehicle_ids:
-                    vehicle_ids.append(vehicle_id)
+                match = regexp_agentid.search(filename)
+                vehicles.add(match.group(1))
 
-        for id in vehicle_ids:
-            with open(
-                os.path.join(path, scenario) + "/Agent-history-vehicle-" + id + ".pkl",
-                "rb",
-            ) as f:
+        for vehicle in vehicles:
+            with open(os.path.join(scen_dir, f"{vehicle}.pkl"), "rb") as f:
                 vehicle_data = pickle.load(f)
 
             image_names = []
-
-            for filename in os.listdir(os.path.join(path, scenario)):
-                if filename.endswith("-" + id + ".png"):
+            for filename in os.listdir(scen_dir):
+                if filename.endswith("_" + vehicle + ".png"):
                     image_names.append(filename)
 
             image_names = sorted(image_names)
             prev_dheading = 0
-
+            match = regexp_time.search(image_names[0])
+            goal_location = vehicle_data[float(match.group(1))].ego_vehicle_state.mission.goal.position.as_np_array
             for i in range(len(image_names) - 1):
-                image = Image.open(os.path.join(path, scenario) + "/" + image_names[i])
+                image = Image.open(os.path.join(scen_dir, image_names[i]))
                 obs.append([np.moveaxis(np.asarray(image), -1, 0)])
-                sim_time = image_names[i].split("_Agent")[0]
-                sim_time_next = image_names[i + 1].split("_Agent")[0]
-                last_sim_time = image_names[-1].split("_Agent")[0]
+                match = regexp_time.search(image_names[i])
+                sim_time = match.group(1)
+                match = regexp_time.search(image_names[i + 1])
+                sim_time_next = match.group(1)
 
-                try:
-                    current_position = vehicle_data[float(sim_time)].ego_vehicle_state.position
-                    next_position = vehicle_data[float(sim_time_next)].ego_vehicle_state.position
-                    current_heading = vehicle_data[float(sim_time)].ego_vehicle_state.heading
-                    next_heading = vehicle_data[float(sim_time_next)].ego_vehicle_state.heading
-                    goal_location = vehicle_data[float(last_sim_time)].ego_vehicle_state.position
-
-                except:
-                    print("scenario ", scenario)
-                    print("id ", id)
-                    print(float(sim_time))
+                current_position = vehicle_data[float(sim_time)].ego_vehicle_state.position
+                next_position = vehicle_data[float(sim_time_next)].ego_vehicle_state.position
+                current_heading = vehicle_data[float(sim_time)].ego_vehicle_state.heading
+                next_heading = vehicle_data[float(sim_time_next)].ego_vehicle_state.heading
 
                 new_current_x, new_current_y = rotate_points(
                     current_position[0], current_position[1], current_heading
@@ -126,7 +106,7 @@ def load_data_scratch(dataset_path, save_path):
     obs = np.array(obs, dtype=object)
     actions = np.array(actions)
 
-    # normalizing dx dy
+    # Normalizing dx and dy.
     moved_obs = np.moveaxis(obs, -1, 0)
     dxdy = []
     for i in range(len(moved_obs[1])):
@@ -137,12 +117,12 @@ def load_data_scratch(dataset_path, save_path):
     for i in range(len(obs)):
         obs[i][1] = scaler.transform([dxdy[i].tolist()])[0]
 
-    # Save scaler
-    dump(scaler, open(os.path.join(save_path, "scaler_IL.pkl"), "wb"))
+    # Save scaler.
+    pickle.dump(scaler, open(os.path.join(save_path, "scaler_IL.pkl"), "wb"))
 
-    print("== Loading data finished ==")
-    print("state dimension = ", obs.shape)
-    print("action dimension = ", actions.shape)
+    print("== Finished loading data ==")
+    print("State dimension = ", obs.shape)
+    print("Action dimension = ", actions.shape)
 
     return obs, actions
 

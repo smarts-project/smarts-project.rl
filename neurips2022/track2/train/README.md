@@ -16,7 +16,7 @@
 ## Notes on the used Observation, Action, and Reward
 + Observations: We use a 3-channel rgb birds eye view image of the form (3, 256, 256) plus oridented and normalized dx & dy between the position of the ego vehicle and the goal location at each time step. dx & dy are calculated by first orienting both the current position and the goal location with respect to the current heading then substracting the oriented current position from the oriented goal location. dx & dy are then normalized using MinMaxScaler whose bound is (-0.1, 0.1).
 + Actions: The action space (output of the policy) is using dx, dy and dh, which are the value change per step in x, y direction and heading for the ego vehicle in its birds eye view image coordinate. dh is normalized by multiplying the values by 100. Since dx and dy can not be directly obtained from smarts observation, we have to get displacement change in global coordinate first and use a rotation matrix w.r.t the heading to get dx, dy. In evaluation, the values of predicted dh need to be divided by 100.
-+ Rewards: The reward use the default reward in SMARTS which is the distance travelled per step plus an extra reward for reaching the goal. Since there is not a "goal" concept in the training set, we use the last point of each trajectory as the goal position for training. 
++ Rewards: The reward use the default reward in SMARTS which is the distance travelled per step plus an extra reward for reaching the goal.
 
 ## Train locally
 1. Train
