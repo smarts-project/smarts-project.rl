@@ -97,7 +97,7 @@ class Policy(BasePolicy):
         # Load saved model and instantiate any needed objects.
         current_path = str(Path(__file__).parent.resolve())
         self.model = MainNet()
-        checkpoint = torch.load(os.path.join(current_path, "model_IL.ckpt"))
+        checkpoint = torch.load(os.path.join(current_path, "model_IL.ckpt"), map_location=torch.device('cpu'))
         self.model.load_state_dict(checkpoint["model_state_dict"])
         self.model.eval()
         self.scaler = pickle.load(
