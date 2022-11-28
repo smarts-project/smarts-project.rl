@@ -124,6 +124,9 @@ xdummy.log
 # Optimization Engine build directory
 OpEn_build/
 
+# Ignore generated ULTRA tasks
+ultra/ultra/scenarios/task*/*/
+
 # Singularity
 *.sif
 
