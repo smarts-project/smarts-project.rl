@@ -7,8 +7,13 @@ This repository contains reinforcement learning (RL) environments and models bui
 ## ULTRA
 + [ULTRA](./ultra/) provides a gym-based environment built upon SMARTS to tackle intersection navigation, specifically the unprotected left turn.
 
-## Zoo
+## Agent Zoo
 + [intersection-v0](./intersection-v0)
     + used at: [SMARTS/examples/rl/intersection](https://github.com/huawei-noah/SMARTS/tree/develop/examples/rl/intersection)
+    + RL library: [StableBaselines3](https://github.com/DLR-RM/stable-baselines3)
+    + algorithm: PPO
+
++ [intersection-v0](./intersection-v0)
+    + used at: [SMARTS/zoo/policies/iamp](https://github.com/huawei-noah/SMARTS/tree/develop/examples/rl/intersection)
     + RL library: [StableBaselines3](https://github.com/DLR-RM/stable-baselines3)
     + algorithm: PPO
