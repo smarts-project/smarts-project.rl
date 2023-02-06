@@ -4,7 +4,7 @@ This repository contains reinforcement learning (RL) environments and models bui
 ## NeurIPS2022
 + The directory [neurips2022](./neurips2022/) contains additional example solutions for Track2 of the Driving SMARTS [competition](https://codalab.lisn.upsaclay.fr/competitions/6618).
 
-## ULTRA
+## Environment zoo
 + [ULTRA](./ultra/) provides a gym-based environment built upon SMARTS to tackle intersection navigation, specifically the unprotected left turn.
 
 ## Agent Zoo
