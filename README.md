@@ -9,11 +9,9 @@ This repository contains reinforcement learning (RL) environments and models bui
 
 ## Agent Zoo
 + [intersection-v0](./intersection-v0)
-    + used at: [SMARTS/examples/rl/intersection](https://github.com/huawei-noah/SMARTS/tree/develop/examples/rl/intersection)
+    + used at: [SMARTS/examples/rl/intersection](https://github.com/huawei-noah/SMARTS/tree/master/examples/rl/intersection)
     + RL library: [StableBaselines3](https://github.com/DLR-RM/stable-baselines3)
     + algorithm: PPO
 
-+ [intersection-v0](./intersection-v0)
-    + used at: [SMARTS/zoo/policies/iamp](https://github.com/huawei-noah/SMARTS/tree/develop/examples/rl/intersection)
-    + RL library: [StableBaselines3](https://github.com/DLR-RM/stable-baselines3)
-    + algorithm: PPO
++ [interaction-aware motion prediction](./interaction_aware_motion_prediction)
+    + used at: [SMARTS/zoo/policies/interaction_aware_motion_prediction](https://github.com/huawei-noah/SMARTS/tree/master/zoo/policies/interaction_aware_motion_prediction)
