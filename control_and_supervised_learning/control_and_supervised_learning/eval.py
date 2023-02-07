@@ -2,6 +2,9 @@ import gym
 import numpy as np
 import math
 import copy
+import logging
+
+logger = logging.getLogger(__name__)
 
 '''
 1. Add s_OGM, s_AGM, s_rel_goal_lane
@@ -9,8 +12,6 @@ import copy
 3. Add lane-changing penalty to decrease meaningless lane changing.
 4. Delete s_rel_goal_pos
 '''
-
-
 # TODO: decrease perception range
 # TODO: complex structure: mix & dueling
 
@@ -56,13 +57,13 @@ def collision_forecast(vehicle_state1, vehicle_state2, l_front=5, l_back=0, w_le
                     np.dot(bp - bps1_right[1], bps1_right[0] - bps1_right[1]) <= 0:
                 return True
                 # if np.linalg.norm(pos1 - pos2) < 5:
-        #     print('collision prediction...')
-        #     print(f"current position:{init_pos1.tolist()}, {init_pos2.tolist()}")
+        #     logger.debug('collision prediction...')
+        #     logger.debug(f"current position:{init_pos1.tolist()}, {init_pos2.tolist()}")
     return False
 
 
 class EnvWrapper():
-    def __init__(self, agent_id, model):
+    def __init__(self, model, agent_id=None):
 
         self._HEADING_ERROR_INDEX = [1, 3, 6, 10, 15]
         self._PERCEIVE_RANGE = 25  # 100
@@ -130,9 +131,10 @@ class EnvWrapper():
         #     './model_50000.pt')  # path to the trained model
         self.model = model
 
-        # 保存agent index,供协商时使用
-        self.agent_id = agent_id
-        self.agent_index = int(agent_id.split('_')[1])
+        if agent_id:
+            # 保存agent index,供协商时使用
+            self.agent_id = agent_id
+            self.agent_index = int(agent_id.split('_')[1])
 
     @property
     def n_lanes(self):
@@ -274,7 +276,7 @@ class EnvWrapper():
             w_right = 0.01
             w_left = lane_widths[2]
         else:
-            # print(f'wrong direction: {direction_index} and {target_direction}')
+            # logger.debug(f'wrong direction: {direction_index} and {target_direction}')
             aaa = 1
         w1_left_vec = (w1 / 2 + w_left) * np.array([math.sin(theta1), -1 * math.cos(theta1)])
         w1_right_vec = (w1 / 2 + w_right) * np.array([math.sin(theta1), -1 * math.cos(theta1)])
@@ -317,7 +319,7 @@ class EnvWrapper():
                         return True
         return False
 
-    def rule_based_action(self, wps_bias):
+    def rule_based_action(self, wps_bias=None):
 
         # 预处理
         self.ego_last_pos = self.ego_current_pos
@@ -373,57 +375,57 @@ class EnvWrapper():
                             if wp_ind % 3 == 0 and wp_ind > 0 and np.linalg.norm(wp.pos - last_wp.pos):
                                 dist_to_goal = np.linalg.norm(path[wp_ind].pos - goal_pos)
                                 if dist_to_goal > last_dist_to_goal + 0.01:
-                                    # print(f'find wrong lane:{path[0].lane_id}, {path[0].lane_index}')
+                                    # logger.debug(f'find wrong lane:{path[0].lane_id}, {path[0].lane_index}')
                                     unavi_path_cnt += 1
                                     break
                                 last_dist_to_goal = dist_to_goal
                                 last_wp = wp
                 if len(raw_obs.waypoint_paths) == unavi_path_cnt:
-                    # print(f'all wrong lane at {raw_obs.elapsed_sim_time}')
+                    # logger.debug(f'all wrong lane at {raw_obs.elapsed_sim_time}')
                     if not self.find_all_wrong_lane_tag_init:
-                        # print(f'{self.agent_tag} first find wrong lanes at {raw_obs.elapsed_sim_time}')
+                        # logger.debug(f'{self.agent_tag} first find wrong lanes at {raw_obs.elapsed_sim_time}')
                         self.find_all_wrong_lane_tag_init = True
                         try:
-                            # print(f'neighbor info')
+                            # logger.debug(f'neighbor info')
                             ego_pos = raw_obs.ego_vehicle_state.position[:2]
-                            print(
+                            logger.debug(
                                 f'meet all wrong lane, current lane:{raw_obs.ego_vehicle_state.lane_index}')
-                            print('  ')
-                            print(f'ego pos x:{round(ego_pos[0], 4)}, y:{round(ego_pos[1], 4)}')
+                            logger.debug('  ')
+                            logger.debug(f'ego pos x:{round(ego_pos[0], 4)}, y:{round(ego_pos[1], 4)}')
                             if hasattr(raw_obs.ego_vehicle_state.mission.goal, "position"):
-                                print(
+                                logger.debug(
                                     f'goal pos x:{round(raw_obs.ego_vehicle_state.mission.goal.position.x, 4)}, y:{round(raw_obs.ego_vehicle_state.mission.goal.position.y, 4)}')
                             exist_lane_id_set = set()
                             for rd_ind, rd_key in enumerate(raw_obs.road_waypoints.lanes):
                                 rd = raw_obs.road_waypoints.lanes[rd_key]
                                 for ln_ind, ln in enumerate(rd):
                                     if len(ln) > 0 and ln[0].lane_id not in exist_lane_id_set:
-                                        print(f'len of {ln[0].lane_id}:{len(ln)}')
-                                        print(
+                                        logger.debug(f'len of {ln[0].lane_id}:{len(ln)}')
+                                        logger.debug(
                                             f'ln first wp x:{round(ln[0].pos[0], 4)}, y:{round(ln[0].pos[1], 4)}, h:{round(float(ln[0].heading), 4)}')
                                         if len(ln) > 1:
-                                            print(
+                                            logger.debug(
                                                 f'ln last wp x:{round(ln[-1].pos[0], 4)}, y:{round(ln[-1].pos[1], 4)}, h:{round(float(ln[-1].heading), 4)}')
                                         exist_lane_id_set.add(ln[0].lane_id)
-                                print('  ')
+                                logger.debug('  ')
                             try:
                                 for wps_ind, wps in enumerate(raw_obs.waypoint_paths):
                                     if len(wps) > 0:
-                                        print(f'wronglane len of {wps[0].lane_id}:{len(wps)}')
-                                        print(
+                                        logger.debug(f'wronglane len of {wps[0].lane_id}:{len(wps)}')
+                                        logger.debug(
                                             f'ln first wp x:{round(wps[0].pos[0], 4)}, y:{round(wps[0].pos[1], 4)}, h:{round(float(wps[0].heading), 4)}')
                                         if len(wps) > 1:
-                                            print(
+                                            logger.debug(
                                                 f'ln last wp x:{round(wps[-1].pos[0], 4)}, y:{round(wps[-1].pos[1], 4)}, h:{round(float(wps[-1].heading), 4)}')
                                         exist_lane_id_set.add(wps[0].lane_id)
-                                print('  ')
+                                logger.debug('  ')
                             except:
-                                print('wrong wps info')
+                                logger.debug('wrong wps info')
 
                         except:
-                            print('wrong lanes info')
+                            logger.debug('wrong lanes info')
         except:
-            print('wrong wps check')
+            logger.debug('wrong wps check')
 
 
 
@@ -444,7 +446,7 @@ class EnvWrapper():
             if np.linalg.norm(neighbor.position[:2] - position) < detection_radius:
                 vel_atten_rate -= 0.02
         vel_atten_rate = max(vel_atten_rate, 0.5)
-        # print('atten rate:', vel_atten_rate)
+        # logger.debug('atten rate:', vel_atten_rate)
 
         # merge识别/直道识别
         self.merge_tag = False
@@ -527,17 +529,17 @@ class EnvWrapper():
                                     best_lane_idx_in_list = index_in_list
                                     min_dheading = abs_dh
                             if len(path_lane_indexs) <= best_lane_idx_in_list:
-                                print(f'unexpected path lane index:{best_lane_idx_in_list}, {len(path_lane_indexs)}')
+                                logger.debug(f'unexpected path lane index:{best_lane_idx_in_list}, {len(path_lane_indexs)}')
                             else:
                                 best_lane_index = path_lane_indexs[best_lane_idx_in_list]
                                 if not self.find_merge:
-                                    print(f'merge info: avg heading:{avg_nb_heading}, best lane:{best_lane_index} at {raw_obs.elapsed_sim_time}')
+                                    logger.debug(f'merge info: avg heading:{avg_nb_heading}, best lane:{best_lane_index} at {raw_obs.elapsed_sim_time}')
                                     self.find_merge = True
                                 if best_lane_index != raw_obs.ego_vehicle_state.lane_index:
                                     self.merge_tag = True
 
         except:
-            print('wrong merge detection')
+            logger.debug('wrong merge detection')
 
         exp_speed = raw_obs.waypoint_paths[self.lane_index][0].speed_limit
 
@@ -572,7 +574,7 @@ class EnvWrapper():
             if self.lane_index - 1 <= wp_lane_index <= self.lane_index + 1:
                 for wp in path:
                     if abs(wp.lane_index - self.lane_index) > 1:
-                        # print(f'wrong lane index {wp.lane_index} and {self.lane_index}')
+                        # logger.debug(f'wrong lane index {wp.lane_index} and {self.lane_index}')
                         continue
                     if np.linalg.norm(wp.pos - curr_pos) >= [2 + 2, 10 + 2][abs(wp.lane_index - self.lane_index)]:
                         reachable_lane_ids.add(wp.lane_id)
@@ -588,8 +590,8 @@ class EnvWrapper():
             elif self.left_width < self.right_width:
                 self.right_width = self.raw_obs.waypoint_paths[self.lane_index][0].lane_width / 2
             else:
-                # print('error: unchanged widths', self.left_width, self.right_width)
-                # print(s_dist_from_center, raw_obs.waypoint_paths[self.lane_index][0].lane_width / 10)
+                # logger.debug('error: unchanged widths', self.left_width, self.right_width)
+                # logger.debug(s_dist_from_center, raw_obs.waypoint_paths[self.lane_index][0].lane_width / 10)
                 # exit(0)
                 pass
         else:
@@ -626,7 +628,7 @@ class EnvWrapper():
                 self.agent_ignore_collision_steps -= 1
         elif packed_obs is not None:
             model_action = self.model.predict([packed_obs])[0]
-            # print('action', model_action)
+            # logger.debug('action', model_action)
         else:
             model_action = 1  # 信息不足，放弃决策
         if model_action == 1:
@@ -690,7 +692,7 @@ class EnvWrapper():
                     cos_theta = np.sum(heading_vec * ego_to_nb_pos_vec) / (np.linalg.norm(ego_to_nb_pos_vec) + 1e-5)
                     if cos_theta < math.cos(math.pi * 5 / 6):  # 侧后方碰撞不能停车
                         continue
-                    if neighbor.id[:5] == 'Agent':
+                    if wps_bias != None and neighbor.id[:5] == 'Agent':
                         neighbor_agent_id = neighbor.id.split('-')[0]
                         neighbor_agent_index = int(neighbor_agent_id.split('_')[1])
                         if wps_bias[self.agent_id] < wps_bias[neighbor_agent_id]:
@@ -709,17 +711,17 @@ class EnvWrapper():
             if is_clear:
                 self.static_steps = 0
                 if self.holding_cnt > 1:
-                    # print(f'holding for {self.holding_cnt} steps')
-                    # print(f'the model has maken {self.moving_act_cnt} moving actions')
+                    # logger.debug(f'holding for {self.holding_cnt} steps')
+                    # logger.debug(f'the model has maken {self.moving_act_cnt} moving actions')
                     aaa = 1
             else:
                 self.static_steps -= 1
                 if self.static_steps == 0:
                     self.ignore_collision_steps = 10
-                    # print()
+                    # logger.debug()
                     if self.holding_cnt > 1:
-                        # print(f'holding for {self.holding_cnt} steps')
-                        # print(f'the model has maken {self.moving_act_cnt} moving actions')
+                        # logger.debug(f'holding for {self.holding_cnt} steps')
+                        # logger.debug(f'the model has maken {self.moving_act_cnt} moving actions')
                         aaa = 1
                 return np.concatenate([curr_pos, [heading, 0.1]])
 
@@ -731,7 +733,7 @@ class EnvWrapper():
                 cos_theta = np.sum(heading_vec * ego_to_nb_pos_vec) / (np.linalg.norm(ego_to_nb_pos_vec) + 1e-5)
                 if cos_theta < math.cos(math.pi * 5 / 6):  # 侧后方碰撞不能停车
                     continue
-                if neighbor.id[:5] == 'Agent':
+                if wps_bias != None and neighbor.id[:5] == 'Agent':
                     neighbor_agent_id = neighbor.id.split('-')[0]
                     neighbor_agent_index = int(neighbor_agent_id.split('_')[1])
                     if wps_bias[self.agent_id] < wps_bias[neighbor_agent_id]:
@@ -798,7 +800,7 @@ class EnvWrapper():
             ego_path = self.raw_obs.waypoint_paths[self.lane_index]
             if len(ego_path) == 1 and self.ego_last_pos is not None and np.linalg.norm(
                     self.raw_obs.ego_vehicle_state.position[:2] - self.ego_last_pos) < 0.1:
-                print(f'in bad lane:{self.lane_index} at {raw_obs.elapsed_sim_time}')
+                logger.debug(f'in bad lane:{self.lane_index} at {raw_obs.elapsed_sim_time}')
                 in_bad_lane = True  # 可能要加远离终点约束
                 if not self.first_in_bad_lane:
                     self.first_in_bad_lane = True
@@ -808,7 +810,7 @@ class EnvWrapper():
             if hasattr(raw_obs.ego_vehicle_state.mission.goal, "position"):
                 if not self.find_goal:
                     self.find_goal = True
-                    print(f'looking for target at {raw_obs.elapsed_sim_time}')
+                    logger.debug(f'looking for target at {raw_obs.elapsed_sim_time}')
                 goal_pos = raw_obs.ego_vehicle_state.mission.goal.position[:2]
                 goal_pos = np.array(goal_pos)
                 dist_to_goal = np.linalg.norm(goal_pos - curr_pos)
@@ -816,11 +818,11 @@ class EnvWrapper():
                 if dist_to_goal < change_to_goal_lane_dist_threshold:
                     self.near_goal = True
                     if dist_to_goal < 10 and not self.straight_change_lane:
-                        print(f'keep moving on straight at {raw_obs.elapsed_sim_time}')
+                        logger.debug(f'keep moving on straight at {raw_obs.elapsed_sim_time}')
                         self.straight_change_lane = True
                     if not self.try_to_change_lane:
                         self.try_to_change_lane = True
-                        print(f'changing lane at {raw_obs.elapsed_sim_time}')
+                        logger.debug(f'changing lane at {raw_obs.elapsed_sim_time}')
                     # todo 找出goal所在车道
                     for lane in raw_obs.waypoint_paths:  # todo 不确定是否会在waypoint_paths出现只有1个点的车道
                         if lane_index_of_goal is not None:
@@ -906,22 +908,22 @@ class EnvWrapper():
                                          exp_speed - current_lane_punishment,
                                          left_exp_speed - change_lane2left_ver_threshold]))
             if current_lane_punishment > 0:
-                print(f'{self.agent_tag} find punishment, action:{action} at {raw_obs.elapsed_sim_time}')
+                logger.debug(f'{self.agent_tag} find punishment, action:{action} at {raw_obs.elapsed_sim_time}')
             if action != 1:
                 self.final_straight_cnt = 0  # 换道后停止减速，快速换道
             if self.merge_tag and best_lane_index > self.lane_index and action == 2:
                 self.changing_lane_while_merging = True
-                print('changing lane to left while merging')
+                logger.debug('changing lane to left while merging')
             if self.merge_tag and best_lane_index < self.lane_index and action == 0:
                 self.changing_lane_while_merging = True
-                print('changing lane to right while merging')
+                logger.debug('changing lane to right while merging')
         else:
             action = 1  # 换道中
         # exp_speed = [right_exp_speed, exp_speed, left_exp_speed][action]  # todo 车辆一般无法在1个step内换道，所以仍采用当前车道的最大速度
 
         # * keep_lane
-        # print('sim time', raw_obs.elapsed_sim_time)
-        # print('lane index', self.lane_index)
+        # logger.debug('sim time', raw_obs.elapsed_sim_time)
+        # logger.debug('lane index', self.lane_index)
 
         # 拥堵速度衰减
         exp_speed *= vel_atten_rate
