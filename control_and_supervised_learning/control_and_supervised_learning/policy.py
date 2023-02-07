@@ -4,38 +4,9 @@ from typing import Any, Dict
 import d3rlpy
 from d3rlpy.dataset import MDPDataset
 from eval import EnvWrapper
+from smarts.core.agent import Agent
 
-
-class BasePolicy:
-    def act(self, obs: Dict[str, Any]):
-        """Act function to be implemented by user.
-        Args:
-            obs (Dict[str, Any]): A dictionary of observation for each ego agent step.
-        Returns:
-            Dict[str, Any]: A dictionary of actions for each ego agent.
-        """
-        raise NotImplementedError
-
-
-def submitted_wrappers():
-    """Return environment wrappers for wrapping the evaluation environment.
-    Each wrapper is of the form: Callable[[env], env]. Use of wrappers is
-    optional. If wrappers are not used, return empty list [].
-    Returns:
-        List[wrappers]: List of wrappers. Default is empty list [].
-    """
-
-    # Insert wrappers here, if any.
-    # wrappers = [
-    #     FormatObs,
-    #     lambda env: FormatAction(env=env, space=ActionSpaceType["TargetPose"]),
-    # ]
-    wrappers = []
-
-    return wrappers
-
-
-class Policy(BasePolicy):
+class Policy(Agent):
     """Policy class to be submitted by the user. This class will be loaded
     and tested during evaluation."""
 
@@ -43,14 +14,7 @@ class Policy(BasePolicy):
         """All policy initialization matters, including loading of model, is
         performed here. To be implemented by the user.
         """
-
         # Load saved model and instantiate any needed objects.
-
-        # policy_name = [
-        #     policy_name
-        #     for policy_name in os.listdir(Path(__file__).absolute().parents[0])
-        #     if policy_name.endswith("pt")
-        # ][0]
         policy_name = Path(__file__).absolute().parents[0] / 'model_20000.pt'
         print('pln', policy_name)
         # TODO: Initialize the agent
@@ -85,7 +49,6 @@ class Policy(BasePolicy):
                 self.agent_ids.add(agent)
             else:
                 self.actors[agent].step(raw_obs)
-        wrapped_act = {}
 
         actions = {}
         wps_bias = {}

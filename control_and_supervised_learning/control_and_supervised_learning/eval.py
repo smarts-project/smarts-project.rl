@@ -61,39 +61,6 @@ def collision_forecast(vehicle_state1, vehicle_state2, l_front=5, l_back=0, w_le
     return False
 
 
-def get_consensus(vehicle_state1, vehicle_state2):
-    """
-        当预测到两个agent vehicl将要碰撞时，根据
-    """
-
-
-class SingleAgentWrapper(gym.Wrapper):
-    def __init__(self, env):
-        super(SingleAgentWrapper, self).__init__(env)
-        self.env = env
-        self._DEFAULT_AGENT = 'Agent_0'
-
-    def reset(self):
-        o = self.env.reset()
-        return o[self._DEFAULT_AGENT]
-
-    def step(self, action):
-        o, r, d, info = self.env.step({self._DEFAULT_AGENT: action})
-        return o[self._DEFAULT_AGENT], r[self._DEFAULT_AGENT], d[self._DEFAULT_AGENT], info[self._DEFAULT_AGENT]
-
-
-def get_distance_point2line(point, line_point1, line_point2):
-    """
-    Args:
-        point: [x0, y0] ndarray
-        line: [x1, y1], [x2, y2] ndarray
-    """
-    vec1 = line_point1 - point
-    vec2 = line_point2 - point
-    distance = np.abs(np.cross(vec1, vec2)) / np.linalg.norm(line_point1 - line_point2)
-    return distance
-
-
 class EnvWrapper():
     def __init__(self, agent_id, model):
 
@@ -1171,13 +1138,3 @@ class EnvWrapper():
             EnvInfo.reshape(-1, ),  # (15)
         ])
         return wrapped_obs
-
-
-def make(task_id, visdom=False):
-    raw_env = gym.make(
-        "smarts.env:multi-scenario-v0",
-        scenario=task_id,
-        visdom=visdom,
-    )
-    env = EnvWrapper(SingleAgentWrapper(raw_env))
-    return env
