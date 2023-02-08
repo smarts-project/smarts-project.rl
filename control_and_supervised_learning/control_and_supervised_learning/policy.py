@@ -12,11 +12,10 @@ class Policy(Agent):
 
     def __init__(self):
         """All policy initialization matters, including loading of model, is
-        performed here. To be implemented by the user.
+        performed here.
         """
         # Load saved model and instantiate any needed objects.
         policy_name = Path(__file__).absolute().parent / 'model_20000.pt'
-        # TODO: Initialize the agent
         encoder = d3rlpy.models.encoders.VectorEncoderFactory([750, 750, 750])
         self.policy = d3rlpy.algos.DiscreteBC(
             use_gpu=False, batch_size=64, encoder_factory=encoder
@@ -32,13 +31,8 @@ class Policy(Agent):
         self._initialized = False
 
     def act(self, obs: Dict[str, Any]):
-        """Act function to be implemented by user.
-        Args:
-            obs (Dict[str, Any]): A dictionary of observation for each ego agent step.
-        Returns:
-            Dict[str, Any]: A dictionary of actions for each ego agent.
+        """Act function.
         """
-        # Use saved model to predict multi-agent action output given multi-agent SMARTS observation input.
         if not self._initialized:
             self.actors.reset(obs)
             self._initialized = True
