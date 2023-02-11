@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Any, Dict
 from wrappers import EnvWrapper, ObsWrapper
 from network import DiscreteSAC, CollisionPredictor, TaskClassifer
 import torch
@@ -54,24 +53,3 @@ class Policy(Agent):
             p = self.net.P_net(o, z_map, collision_prob)
             a[agent_id] = p.argmax().item()
         return a
-    
-
-# if __name__ == "__main__":
-#     import gym
-#     env = gym.make(
-#         "smarts.env:multi-scenario-v0",
-#         scenario="3lane_merge_multi_agent",
-#         visdom=True,
-#     )
-#     for wrapper in submitted_wrappers():
-#         env = wrapper(env)
-        
-#     policy = Policy()
-    
-#     o = env.reset()
-#     a = policy.act(o)
-#     d = {"__all__": False}
-#     for i in range(80):
-#     # while not d["__all__"]:
-#         a = policy.act(o)
-#         o, r, d, info = env.step(a)
