@@ -265,17 +265,11 @@ class ObsWrapper(gym.ObservationWrapper):
         return wrapped_obs
 
 class EnvWrapper(gym.Wrapper):
-    def __init__(self, env: ObsWrapper):
+    def __init__(self, env):
         super().__init__(env)
         self.env = env
         self.time_cost = -1.0
-        self.crash_times = 0
-        
-        # self.action_space_n = 11
-        # self.observation_space_shape = (
-        #     self.env.neighbor_info_dim*5+self.env.env_info_dim*3,
-        # )
-        
+        self.crash_times = 0        
         self._rule_stop_cnt = 0
         self._is_on_goal_lane_last = -1
         
