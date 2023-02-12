@@ -1,6 +1,6 @@
-import gym
+import gymnasium as gym
 import numpy as np
-from smarts.env.wrappers.format_obs import FormatObs
+from .format_obs import formatter
 from collections import namedtuple
 import math
 
@@ -25,7 +25,6 @@ class ObsWrapper(gym.ObservationWrapper):
     '''
     def __init__(self, env, use_fake_goal_lane=False):
         super(ObsWrapper, self).__init__(env)
-        self.np_wrapper = FormatObs(env)
         
         self.preserved_info_single_agent = namedtuple("PreservedInfoSingleAgent", [
             'raw_obs',
@@ -42,7 +41,7 @@ class ObsWrapper(gym.ObservationWrapper):
             'goal_lane',
             'wrapped_obs'
         ])
-        self.preserved_info: dict[str, self.preserved_info_single_agent] = {}
+        self.preserved_info = {}
         self.target_lane_index = {}
         
         self.neighbor_info_dim = 5
@@ -57,11 +56,14 @@ class ObsWrapper(gym.ObservationWrapper):
         self.target_lane_index = {}
         self.fake_goal_lane = -1
         self._FAKE_GOAL_LANE_COUNTER = 0
-        return super().reset()
-    
+        print("RESETTING IN OBS WRAPPER")
+        d = super().reset()
+        return d
+
     def step(self, action):
         self._FAKE_GOAL_LANE_COUNTER += 1
         self._update_fake_goal_lane()
+        print("STEPPING IN OBS WRAPPER ))))))))))))))))")
         return super().step(action)
     
     def _update_fake_goal_lane(self):
@@ -95,8 +97,8 @@ class ObsWrapper(gym.ObservationWrapper):
         if not hasattr(raw_obs.ego_vehicle_state.mission.goal, "position"): return goal_lane
         cos_thetas = np.zeros(4)
         for i in range(4):
-            y1 = np_obs["waypoints"]["pos"][i, 1][:2] - np_obs["waypoints"]["pos"][i, 0][:2]
-            y2 = np_obs["mission"]["goal_pos"][:2] - np_obs["waypoints"]["pos"][i, 0][:2]
+            y1 = np_obs["waypoint_paths"]["pos"][i, 1][:2] - np_obs["waypoint_paths"]["pos"][i, 0][:2]
+            y2 = np_obs["mission"]["goal_pos"][:2] - np_obs["waypoint_paths"]["pos"][i, 0][:2]
             if np.linalg.norm(y2) <= 0.2 or np.linalg.norm(y1) <= 0.2: continue 
             cos_thetas[i] = abs(y1@y2/np.sqrt(y1@y1*y2@y2))
         if cos_thetas.max() > 1 - 0.0001:
@@ -106,33 +108,30 @@ class ObsWrapper(gym.ObservationWrapper):
             goal_lane[:, 2] = (l > lane_index+np.array([-1,0,1])).astype(np.float32)
         return goal_lane
         
-    def observation(self, all_raw_obs):
-        all_np_obs = self.np_wrapper.observation(all_raw_obs)
-        
-        self.preserved_info = dict.fromkeys(all_raw_obs.keys())
-        wrapped_obs = dict.fromkeys(all_raw_obs.keys())
-        
-        for agent_id in all_raw_obs.keys():
-            raw_obs, np_obs = all_raw_obs[agent_id], all_np_obs[agent_id]
+    def observation(self, dict_obs):
+        print("calling observation ....")
+        wrapped_obs = {}
+        for agent_id, obs in dict_obs.items():
+            raw_obs, np_obs = obs, formatter(obs)
 
             # ego_vehicle_state
-            pos = np_obs["ego"]["pos"][:2]
-            heading = np_obs["ego"]["heading"]
-            speed = np_obs["ego"]["speed"]
-            lane_index = np_obs["ego"]["lane_index"]
-            jerk_linear = np.linalg.norm(np_obs["ego"]["linear_jerk"])
-            jerk_angular = np.linalg.norm(np_obs["ego"]["angular_jerk"])
+            pos = np_obs["ego_vehicle_state"]["pos"][:2]
+            heading = np_obs["ego_vehicle_state"]["heading"]
+            speed = np_obs["ego_vehicle_state"]["speed"]
+            lane_index = np_obs["ego_vehicle_state"]["lane_index"]
+            jerk_linear = np.linalg.norm(np_obs["ego_vehicle_state"]["linear_jerk"])
+            jerk_angular = np.linalg.norm(np_obs["ego_vehicle_state"]["angular_jerk"])
             humaness = jerk_linear + jerk_angular
             rotate_M = np.array([
                 [ np.cos(heading), np.sin(heading)], 
                 [-np.sin(heading), np.cos(heading)]]
             )
 
-            all_lane_indeces = np_obs["waypoints"]["lane_index"][:, 0]
-            all_lane_speed_limit = np_obs["waypoints"]["speed_limit"][:, 0].reshape(4, 1)
-            all_lane_width = np_obs["waypoints"]["lane_width"][:, 0].reshape(4, 1)
-            all_lane_position = np_obs["waypoints"]["pos"][:, :, :2].reshape(4, 20, 2)
-            all_lane_heading = np_obs["waypoints"]["heading"][:, :].reshape(4, 20)
+            all_lane_indeces = np_obs["waypoint_paths"]["lane_index"][:, 0]
+            all_lane_speed_limit = np_obs["waypoint_paths"]["speed_limit"][:, 0].reshape(4, 1)
+            all_lane_width = np_obs["waypoint_paths"]["lane_width"][:, 0].reshape(4, 1)
+            all_lane_position = np_obs["waypoint_paths"]["pos"][:, :, :2].reshape(4, 20, 2)
+            all_lane_heading = np_obs["waypoint_paths"]["heading"][:, :].reshape(4, 20)
             
             all_lane_rel_position = ((all_lane_position.reshape(-1, 2) - pos.reshape(1, 2)) @ rotate_M.T).reshape(4, 20, 2)
             all_lane_rel_heading = (all_lane_heading - heading)
@@ -203,9 +202,9 @@ class ObsWrapper(gym.ObservationWrapper):
             
             # Neighbor Info
             
-            neighbors_pos = np_obs["neighbors"]["pos"][:, :2]
-            neighbors_speed = np_obs["neighbors"]["speed"]
-            neighbors_heading = np_obs["neighbors"]["heading"]
+            neighbors_pos = np_obs["neighborhood_vehicle_states"]["pos"][:, :2]
+            neighbors_speed = np_obs["neighborhood_vehicle_states"]["speed"]
+            neighbors_heading = np_obs["neighborhood_vehicle_states"]["heading"]
             
             neighbors_rel_vel = np.empty((10, 2))
             neighbors_rel_vel[:, 0] = -np.sin(neighbors_heading) * neighbors_speed + np.sin(heading) * speed
@@ -233,13 +232,9 @@ class ObsWrapper(gym.ObservationWrapper):
             
 
             # preserved_info
-            wp_mask = np.abs(np.all(np_obs["waypoints"]["pos"][:, :4] == 0, -1) - 1).sum(1).reshape(4, 1)
-            target_wps = np_obs["waypoints"]["pos"][:, :4, :].sum(1) / (wp_mask + 1e-8)
-            wrapped_obs[agent_id] = np.concatenate([
-                NeighborInfo.reshape(-1,), # (5, 5)
-                EnvInfo.reshape(-1,),      # (3, 19)
-            ])
-            
+            wp_mask = np.abs(np.all(np_obs["waypoint_paths"]["pos"][:, :4] == 0, -1) - 1).sum(1).reshape(4, 1)
+            target_wps = np_obs["waypoint_paths"]["pos"][:, :4, :].sum(1) / (wp_mask + 1e-8)
+
             self.preserved_info[agent_id] = self.preserved_info_single_agent(
                 raw_obs = raw_obs,
                 lane_index = lane_index,
@@ -256,11 +251,14 @@ class ObsWrapper(gym.ObservationWrapper):
                 ]), # dim: 235
                 is_turnable = EnvInfo_is_turnable,
                 goal_lane = EnvInfo_is_goal[1, :],
-                wrapped_obs = wrapped_obs[agent_id],
+                wrapped_obs = np.concatenate([
+                    NeighborInfo.reshape(-1,), # (5, 5)
+                    EnvInfo.reshape(-1,),      # (3, 19)
+                ]),
             )
             
             wrapped_obs[agent_id] = np.concatenate([
-                wrapped_obs[agent_id],
+                self.preserved_info[agent_id].wrapped_obs,
                 self.preserved_info[agent_id].classifier_input
             ], -1)
             
@@ -273,10 +271,10 @@ class EnvWrapper(gym.Wrapper):
         self.time_cost = -1.0
         self.crash_times = 0
         
-        self.action_space_n = 11
-        self.observation_space_shape = (
-            self.env.neighbor_info_dim*5+self.env.env_info_dim*3,
-        )
+        # self.action_space_n = 11
+        # self.observation_space_shape = (
+        #     self.env.neighbor_info_dim*5+self.env.env_info_dim*3,
+        # )
         
         self._rule_stop_cnt = 0
         self._is_on_goal_lane_last = -1
@@ -352,17 +350,10 @@ class EnvWrapper(gym.Wrapper):
         return raw_obs
     
     def step(self, raw_act):
-        if self.agents_id == {}: wrapped_act = {}
-        else: wrapped_act = self.pack_action(raw_act)
-        obs, reward, done, info = self.env.step(wrapped_act)
-        return obs, reward, done, info
-        
-    @property
-    def agents_id(self):
-        if self.env.preserved_info is not None:
-            return self.env.preserved_info.keys()
-        else: 
-            return {}
+        wrapped_act = self.pack_action(raw_act)
+        print("GOING INTO SETP IN SECOND WRAPPER ------------------------")
+        d = self.env.step(wrapped_act)
+        return d       
         
     def cal_collision_r(self, bounding_box):
         return np.sqrt(bounding_box.length ** 2 + bounding_box.width ** 2)
@@ -371,8 +362,8 @@ class EnvWrapper(gym.Wrapper):
         return np.sqrt(((pos1 - pos2)**2).sum())
 
     def pack_action(self, action):
-        wrapped_act = dict.fromkeys(self.agents_id)
-        for agent_id in self.agents_id:
+        wrapped_act = {}
+        for agent_id in action.keys():
 
             raw_obs = self.env.preserved_info[agent_id].raw_obs
             all_lane_indeces = self.env.preserved_info[agent_id].all_lane_indeces

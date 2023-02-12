@@ -35,21 +35,36 @@ class Policy(Agent):
         
     @torch.no_grad()
     def act(self, obs):
-        if obs is {}:
-            return {}
-        a = {}
-        for agent_id in obs.keys():
-            o = torch.from_numpy(obs[agent_id]).to(self.device).float().reshape(1, -1)
-            classifier_input = o[:, 100:]
-            o = o[:, :100]
-            
-            # classify task
-            logits = self.classifier(classifier_input)
-            z_map = F.one_hot(logits.argmax(-1), 9).reshape(1, -1).float()
-            
-            # collision prediction
-            collision_prob = self.collision_predictor(o).mean(-1)
-            
-            p = self.net.P_net(o, z_map, collision_prob)
-            a[agent_id] = p.argmax().item()
+        o = torch.from_numpy(obs).to(self.device).float().reshape(1, -1)
+        classifier_input = o[:, 100:]
+        o = o[:, :100]
+        
+        # classify task
+        logits = self.classifier(classifier_input)
+        z_map = F.one_hot(logits.argmax(-1), 9).reshape(1, -1).float()
+        
+        # collision prediction
+        collision_prob = self.collision_predictor(o).mean(-1)
+        
+        p = self.net.P_net(o, z_map, collision_prob)
+        a = p.argmax().item()
         return a
+
+        # if obs is {}:
+        #     return {}
+        # a = {}
+        # for agent_id in obs.keys():
+        #     o = torch.from_numpy(obs[agent_id]).to(self.device).float().reshape(1, -1)
+        #     classifier_input = o[:, 100:]
+        #     o = o[:, :100]
+            
+        #     # classify task
+        #     logits = self.classifier(classifier_input)
+        #     z_map = F.one_hot(logits.argmax(-1), 9).reshape(1, -1).float()
+            
+        #     # collision prediction
+        #     collision_prob = self.collision_predictor(o).mean(-1)
+            
+        #     p = self.net.P_net(o, z_map, collision_prob)
+        #     a[agent_id] = p.argmax().item()
+        # return a
