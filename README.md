@@ -13,6 +13,9 @@ This repository contains reinforcement learning (RL) environments and models bui
 + [Control and Supervised Learning](./control_and_supervised_learning)
     + used at: [SMARTS/zoo/policies/control_and_supervised_learning](https://github.com/huawei-noah/SMARTS/tree/master/zoo/policies/control_and_supervised_learning)
 
++ [Discrete Soft Actor Critic](./discrete_soft_actor_critic)
+    + used at: [SMARTS/zoo/policies/discrete_soft_actor_critic](https://github.com/huawei-noah/SMARTS/tree/master/zoo/policies/discrete_soft_actor_critic)
+
 ## Environment zoo
 + [ULTRA](./ultra/) provides a gym-based environment built upon SMARTS to tackle intersection navigation, specifically the unprotected left turn.
 
