@@ -4,20 +4,15 @@ import numpy as np
 
 from smarts.core.events import Events
 from smarts.core.observations import (
-    DrivableAreaGridMap,
     EgoVehicleObservation,
-    OccupancyGridMap,
-    SignalObservation,
-    TopDownRGB,
+    Observation,
     VehicleObservation,
-    Observation
 )
 from smarts.core.road_map import Waypoint
 
 _LIDAR_SHP = 300
 _NEIGHBOR_SHP = 10
 _WAYPOINT_SHP = (4, 20)
-_SIGNALS_SHP = (3,)
 
 """
 Observations in numpy array format, suitable for vectorized processing.
@@ -87,10 +82,6 @@ StdObs = dict({
             1 if ego vehicle drives in the wrong traffic direction, else 0.
     })
 
-    Drivable area grid map. Map is binary, with 255 if a cell contains a road,
-    else 0. dtype=np.uint8.
-    "drivable_area_grid_map": np.ndarray
-
     Lidar point cloud, with the following attributes.
     "lidar_point_cloud": dict({
         "hit":
@@ -131,14 +122,6 @@ StdObs = dict({
             vehicle. shape=(10,). dtype=np.float32.
     })
 
-    Occupancy grid map. Map is binary, with 255 if a cell is occupied, else 0.
-    dtype=np.uint8.
-    "occupancy_grid_map": np.ndarray
-
-    RGB image, from the top view, with ego vehicle at the center.
-    shape=(height, width, 3). dtype=np.uint8.
-    "top_down_rgb": np.ndarray
-
     Feature array of 20 waypoints ahead or in the mission route, from the 
     nearest 4 lanes. If lanes or waypoints ahead are insufficient, default 
     values are padded.
@@ -159,47 +142,35 @@ StdObs = dict({
             Lane speed limit at a waypoint in m/s. shape=(4,20). dtype=np.float32.
     }) 
 
-    Feature array of 3 upcoming signals.  If there aren't this many signals ahead,
-    default values are padded.
-    "signals": dict({
-        "state":
-            The state of the traffic signal.
-            See smarts.core.signal_provider.SignalLightState for interpretation.
-            Defaults to np.array([0]) per signal.  shape=(3,), dtype=np.int8.
-        "stop_point":
-            The stopping point for traffic controlled by the signal, i.e., the
-            point where actors should stop when the signal is in a stop state.
-            Defaults to np.array([0, 0]) per signal.  shape=(3,2), dtype=np.float64.
-        "last_changed":
-            If known, the simulation time this signal last changed its state.
-            Defaults to np.array([0]) per signal.  shape=(3,), dtype=np.float32.
-    })
 })
 """
+
 
 def formatter(observation: Observation) -> Dict[str, Any]:
     """Converts SMARTS observations to gym-compliant vectorized
     observations.
     """
-    space = ['distance_travelled', 'ego_vehicle_state', 'events', 'mission', 'waypoint_paths', 'neighborhood_vehicle_states', 'lidar_point_cloud']
+    space = [
+        "distance_travelled",
+        "ego_vehicle_state",
+        "events",
+        "mission",
+        "waypoint_paths",
+        "neighborhood_vehicle_states",
+        "lidar_point_cloud",
+    ]
     wrapped_ob = {}
     for stdob in space:
         func = globals()[f"_std_{stdob}"]
         if stdob == "ego_vehicle_state":
             val = func(getattr(observation, stdob), True)
         elif stdob == "mission":
-            val = func(getattr(observation, "ego_vehicle_state"))    
+            val = func(getattr(observation, "ego_vehicle_state"))
         else:
             val = func(getattr(observation, stdob))
         wrapped_ob.update({stdob: val})
 
     return wrapped_ob
-
-
-def _std_drivable_area_grid_map(
-    val: DrivableAreaGridMap,
-) -> np.ndarray:
-    return val.data.astype(np.uint8)
 
 
 def _std_distance_travelled(val: float) -> float:
@@ -345,14 +316,6 @@ def _std_neighborhood_vehicle_states(
     }
 
 
-def _std_occupancy_grid_map(val: OccupancyGridMap) -> np.ndarray:
-    return val.data.astype(np.uint8)
-
-
-def _std_top_down_rgb(val: TopDownRGB) -> np.ndarray:
-    return val.data.astype(np.uint8)
-
-
 def _std_waypoint_paths(
     rcv_paths: List[List[Waypoint]],
 ) -> Dict[str, np.ndarray]:
@@ -401,38 +364,4 @@ def _std_waypoint_paths(
         "lane_width": lane_width,
         "pos": pos,
         "speed_limit": speed_limit,
-    }
-
-
-def _std_signals(
-    signals: List[SignalObservation],
-) -> Dict[str, np.ndarray]:
-
-    des_shp = _SIGNALS_SHP
-    rcv_shp = len(signals)
-    pad_shp = max(0, des_shp[0] - rcv_shp)
-
-    if rcv_shp == 0:
-        return {
-            "state": np.zeros(des_shp, dtype=np.int8),
-            "stop_point": np.zeros(des_shp + (2,), dtype=np.float64),
-            "last_changed": np.zeros(des_shp, dtype=np.float32),
-        }
-
-    signals = [
-        (signal.state, signal.stop_point, signal.last_changed)
-        for signal in signals[: des_shp[0]]
-    ]
-    state, stop_point, last_changed = zip(*signals)
-
-    # fmt: off
-    state = np.pad(state, ((0, pad_shp)), mode='constant', constant_values=0)
-    stop_point = np.pad(state, ((0, pad_shp), (0, 0)), mode='constant', constant_values=0)
-    last_changed = np.pad(last_changed, ((0, pad_shp)), mode='constant', constant_values=0)
-    # fmt: on
-
-    return {
-        "state": state,
-        "stop_point": stop_point,
-        "last_changed": last_changed,
     }
