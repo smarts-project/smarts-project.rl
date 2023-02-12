@@ -1,6 +1,6 @@
 from pathlib import Path
-from wrappers import EnvWrapper, ObsWrapper
-from network import DiscreteSAC, CollisionPredictor, TaskClassifer
+from .wrappers import EnvWrapper, ObsWrapper
+from .network import DiscreteSAC, CollisionPredictor, TaskClassifer
 import torch
 import torch.nn.functional as F
 
@@ -26,7 +26,7 @@ class Policy(Agent):
         self.load()
         
     def load(self):
-        params = torch.load(Path(__file__).absolute().parents[0] / "SSM_5_130k.pt", map_location=torch.device(self.device))
+        params = torch.load(Path(__file__).absolute().parents[0] / "SSM_1.pt", map_location=torch.device(self.device))
         params_c = torch.load(Path(__file__).absolute().parents[0] / "classifier_model.pt", map_location=torch.device(self.device))
         
         self.net.load_state_dict(params["net"])

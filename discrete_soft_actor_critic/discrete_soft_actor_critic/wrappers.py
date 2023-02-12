@@ -1,7 +1,7 @@
-from smarts.env.wrappers.format_obs import FormatObs
-from collections import namedtuple
 import gym
 import numpy as np
+from smarts.env.wrappers.format_obs import FormatObs
+from collections import namedtuple
 import math
 
 class ObsWrapper(gym.ObservationWrapper):
@@ -23,22 +23,15 @@ class ObsWrapper(gym.ObservationWrapper):
      - is turnable
      - relative lane index
     '''
-    def __init__(self, env):
+    def __init__(self, env, use_fake_goal_lane=False):
         super(ObsWrapper, self).__init__(env)
         self.np_wrapper = FormatObs(env)
         
         self.preserved_info_single_agent = namedtuple("PreservedInfoSingleAgent", [
             'raw_obs',
             'np_obs',
-            
-            # lane index info
             'lane_index',
             'all_lane_indeces',
-            'masked_all_lane_indeces',
-            
-            # road index info
-            'all_road_indeces',
-            
             'target_wps',
             'speed_limit',
             'speed',
@@ -47,30 +40,35 @@ class ObsWrapper(gym.ObservationWrapper):
             'classifier_input',
             'is_turnable',
             'goal_lane',
-            'wrapped_obs',
-            'road_all_wrong',
-            'lane_on_heading',
-            'distance_to_goal',
+            'wrapped_obs'
         ])
         self.preserved_info: dict[str, self.preserved_info_single_agent] = {}
         self.target_lane_index = {}
-        self.target_road_index = {}
-                
-        self.last_correct_wp_pos = {}
-        self.last_correct_st = {}  
+        
         self.neighbor_info_dim = 5
         self.env_info_dim = 25
-
+        
+        self._FAKE_GOAL_LANE_CHG_FREQ = 200
+        self._FAKE_GOAL_LANE_COUNTER = 0
+        self.fake_goal_lane = 0
+        self.use_fake_goal_lane = use_fake_goal_lane
+        
     def reset(self):
         self.target_lane_index = {}
-        self.target_road_index = {}
-        self.last_correct_wp_pos = {}
-        self.last_correct_st = {}
+        self.fake_goal_lane = -1
+        self._FAKE_GOAL_LANE_COUNTER = 0
         return super().reset()
     
     def step(self, action):
+        self._FAKE_GOAL_LANE_COUNTER += 1
+        self._update_fake_goal_lane()
         return super().step(action)
-
+    
+    def _update_fake_goal_lane(self):
+        if self._FAKE_GOAL_LANE_COUNTER == self._FAKE_GOAL_LANE_CHG_FREQ:
+            self._FAKE_GOAL_LANE_COUNTER = 0
+            self.fake_goal_lane = np.random.randint(0, 4) - 1
+        
     def cal_rel_vel(self, v1: float, theta1: float, v2: float, theta2: float) -> np.ndarray:
         ''' Calculate v1 relative to v2. '''
         return np.array([
@@ -86,7 +84,14 @@ class ObsWrapper(gym.ObservationWrapper):
         return h
         
     def cal_goal_lane(self, np_obs, raw_obs, lane_index, all_lane_indeces):
-        goal_lane = np.zeros((3, 3))
+        goal_lane = np.zeros((3,3))
+        if self.use_fake_goal_lane:
+            if self.fake_goal_lane == -1:
+                return goal_lane
+            goal_lane[:, 0] = (self.fake_goal_lane <  lane_index+np.array([-1,0,1])).astype(np.float32)
+            goal_lane[:, 1] = (self.fake_goal_lane == lane_index+np.array([-1,0,1])).astype(np.float32)
+            goal_lane[:, 2] = (self.fake_goal_lane >  lane_index+np.array([-1,0,1])).astype(np.float32)
+            return goal_lane
         if not hasattr(raw_obs.ego_vehicle_state.mission.goal, "position"): return goal_lane
         cos_thetas = np.zeros(4)
         for i in range(4):
@@ -96,111 +101,10 @@ class ObsWrapper(gym.ObservationWrapper):
             cos_thetas[i] = abs(y1@y2/np.sqrt(y1@y1*y2@y2))
         if cos_thetas.max() > 1 - 0.0001:
             l = all_lane_indeces[cos_thetas.argmax()]
-            if l == -1: return goal_lane
             goal_lane[:, 0] = (l < lane_index+np.array([-1,0,1])).astype(np.float32)
             goal_lane[:, 1] = (l == lane_index+np.array([-1,0,1])).astype(np.float32)
             goal_lane[:, 2] = (l > lane_index+np.array([-1,0,1])).astype(np.float32)
         return goal_lane
-        
-    def get_which_road_the_lane_belongs_to(self, np_obs, mse_threshold=40, horizon=20) -> np.ndarray:
-        ''' lane_indeces: [0,0,0,0] -> road_indeces: [0,1,2,-1] '''
-        road_indeces = np.zeros(4)
-        wp_pos = np_obs["waypoints"]["pos"][:, :horizon, :2]
-        rel_wp_pos = (wp_pos - wp_pos[0, :, :])
-        delta_rel_wp_pos = rel_wp_pos - rel_wp_pos[:, 0:1, :]
-        mask = np.any(wp_pos, -1).reshape((4,20,1))
-        delta_rel_wp_pos *= mask
-        
-        similarity = (delta_rel_wp_pos ** 2).sum((1,2))     
-        for i in range(1, 4):
-            if np.all(wp_pos[i, ...] == 0):
-                road_indeces[i] = -1 # padding
-                continue
-            for j in range(i):
-                if abs(similarity[i] - similarity[j]) < mse_threshold:
-                    road_indeces[i] = road_indeces[j] # belongs to the same road
-                    break
-            else:
-                road_indeces[i] = road_indeces[i-1] + 1 # belongs to another road
-        return road_indeces
-    
-    def choose_target_road_index(self, np_obs, all_road_indeces) -> int:
-        ''' Choose the road that is the closest to goal. '''
-        # if it is an endless mission and there is more than one road, we just need to BAI LAN
-        wp_end_points = np_obs["waypoints"]["pos"][:, -1, :2]
-        goal_point = np_obs["mission"]["goal_pos"][:2].reshape(1, -1)
-        dist = ((goal_point-wp_end_points)**2).sum(-1)
-        dist[np.where(all_road_indeces == -1)] = dist.max() + 1
-        return int(all_road_indeces[dist.argmin()])
-    
-    def check_wrong_road(self, np_obs, raw_obs):
-        wrong_road_indeces = np.ones(4)
-        if not hasattr(raw_obs.ego_vehicle_state.mission.goal, "position"): return wrong_road_indeces
-        goal_point = np_obs["mission"]["goal_pos"][:2].reshape(1, -1)
-        wp_pos = np_obs["waypoints"]["pos"][:, :, :2]
-        
-        for i in range(4):
-            last_zero_index = 0
-            for j in range(-1, -20, -1):
-                if np.any(wp_pos[i, j-1]):
-                    last_zero_index = j
-                    break
-            else:
-                last_zero_index = j-1
-            if last_zero_index == -20:
-                wrong_road_indeces[i] = 0
-                continue
-            wp_end_points = wp_pos[i, last_zero_index-3:last_zero_index]
-            if wp_end_points.shape[0] < 3:
-                wrong_road_indeces[i] = 1
-                continue
-            dist_to_goal = ((goal_point-wp_end_points)**2).sum(-1)
-            if not (dist_to_goal[0] > dist_to_goal[1] and 
-                    dist_to_goal[1] > dist_to_goal[2]):
-                wrong_road_indeces[i] = 0
-        return wrong_road_indeces
-        
-    def get_np_neighbor_info(self, raw_obs, pos, speed, heading, rotate_M):
-        neighbor_pos, neighbor_speed, neighbor_heading = [],[],[]
-        for neighbor in raw_obs.neighborhood_vehicle_states:
-            neighbor_pos.append(neighbor.position[:2])
-            neighbor_speed.append(neighbor.speed)
-            neighbor_heading.append(neighbor.heading)
-            
-        if len(neighbor_pos) != 0:
-            neighbor_pos = np.concatenate(neighbor_pos).reshape(-1, 2)
-            neighbor_speed = np.array(neighbor_speed)
-            neighbor_heading = np.array(neighbor_heading)
-            
-            if neighbor_pos.shape[0] < 5:
-                sp = 5 - neighbor_pos.shape[0]
-                neighbor_pos = np.concatenate([neighbor_pos, np.ones((sp, 2))*200])
-                neighbor_speed = np.concatenate([neighbor_speed, np.ones(sp)*speed])
-                neighbor_heading = np.concatenate([neighbor_heading, np.ones(sp)*heading])
-        else:
-            neighbor_pos = np.ones((5, 2))*200
-            neighbor_speed = np.ones(5)*speed
-            neighbor_heading = np.ones(5)*heading
-        assert neighbor_pos.shape[0] >= 5
-        
-        NeighborInfo_rel_pos = ((neighbor_pos - pos.reshape(1, 2)) @ rotate_M.T)
-        rel_dist = (NeighborInfo_rel_pos**2).sum(-1)
-        st = rel_dist.argsort()[:5]
-        
-        NeighborInfo_rel_pos = NeighborInfo_rel_pos[st]
-        neighbor_heading = neighbor_heading[st]
-        neighbor_speed = neighbor_speed[st]
-        
-        neighbors_rel_vel = np.empty((5, 2))
-        neighbors_rel_vel[:, 0] = -np.sin(neighbor_heading) * neighbor_speed + np.sin(heading) * speed
-        neighbors_rel_vel[:, 1] = np.cos(neighbor_heading) * neighbor_speed - np.cos(heading) * speed
-        NeighborInfo_rel_vel = ((neighbors_rel_vel) @ rotate_M.T)
-    
-        NeighborInfo_rel_heading = (neighbor_heading - heading).reshape(5, 1)
-        NeighborInfo_rel_heading[np.where(NeighborInfo_rel_heading >  np.pi)] -= np.pi
-        NeighborInfo_rel_heading[np.where(NeighborInfo_rel_heading < -np.pi)] += np.pi
-        
-        return (NeighborInfo_rel_pos, NeighborInfo_rel_vel, NeighborInfo_rel_heading)
         
     def observation(self, all_raw_obs):
         all_np_obs = self.np_wrapper.observation(all_raw_obs)
@@ -208,16 +112,8 @@ class ObsWrapper(gym.ObservationWrapper):
         self.preserved_info = dict.fromkeys(all_raw_obs.keys())
         wrapped_obs = dict.fromkeys(all_raw_obs.keys())
         
-        # ! LOG
-        success_flag = True
-        collision_flag = False
-        
         for agent_id in all_raw_obs.keys():
             raw_obs, np_obs = all_raw_obs[agent_id], all_np_obs[agent_id]
-            
-            # ! LOG
-            success_flag = (success_flag and raw_obs.events.reached_goal)
-            collision_flag = (collision_flag or len(raw_obs.events.collisions))
 
             # ego_vehicle_state
             pos = np_obs["ego"]["pos"][:2]
@@ -231,14 +127,8 @@ class ObsWrapper(gym.ObservationWrapper):
                 [ np.cos(heading), np.sin(heading)], 
                 [-np.sin(heading), np.cos(heading)]]
             )
-            if not hasattr(raw_obs.ego_vehicle_state.mission.goal, "position"):
-                distance_to_goal = -1 
-            else:
-                distance_to_goal = np.sqrt(((raw_obs.ego_vehicle_state.mission.goal.position[:2] - pos)**2).sum())
 
             all_lane_indeces = np_obs["waypoints"]["lane_index"][:, 0]
-            all_road_indeces = self.get_which_road_the_lane_belongs_to(np_obs)
-            self.target_road_index[agent_id] = self.choose_target_road_index(np_obs, all_road_indeces)
             all_lane_speed_limit = np_obs["waypoints"]["speed_limit"][:, 0].reshape(4, 1)
             all_lane_width = np_obs["waypoints"]["lane_width"][:, 0].reshape(4, 1)
             all_lane_position = np_obs["waypoints"]["pos"][:, :, :2].reshape(4, 20, 2)
@@ -248,41 +138,25 @@ class ObsWrapper(gym.ObservationWrapper):
             all_lane_rel_heading = (all_lane_heading - heading)
             all_lane_rel_heading[np.where(all_lane_rel_heading >  np.pi)] -= np.pi
             all_lane_rel_heading[np.where(all_lane_rel_heading < -np.pi)] += np.pi
-
-            # check wrong road
-            wrong_road_indeces = self.check_wrong_road(np_obs, raw_obs)
-            road_all_wrong = True if not np.any(wrong_road_indeces) else False
-            if not road_all_wrong:
-                self.last_correct_wp_pos[agent_id] = np_obs["waypoints"]["pos"][:, :, :2]
-            else:
-                # ! LOG
-                print("[INFO] all roads are wrong.")
+            
+            if lane_index not in all_lane_indeces:
+                lane_index = all_lane_indeces[0]
+            if agent_id not in self.target_lane_index.keys() or self.target_lane_index[agent_id] not in all_lane_indeces:
+                self.target_lane_index[agent_id] = lane_index
 
             # Env Info
             st = [0]*3
-            # ! Only consider lanes belong to the target road
-            masked_all_lane_indeces = all_lane_indeces.copy()
-            masked_all_lane_indeces[np.where(all_road_indeces!=self.target_road_index[agent_id])] = -1
-            if lane_index not in masked_all_lane_indeces:
-                lane_index = masked_all_lane_indeces[np.where(masked_all_lane_indeces!=-1)[0][0]].item()
-            if agent_id not in self.target_lane_index.keys() or self.target_lane_index[agent_id] not in masked_all_lane_indeces:
-                self.target_lane_index[agent_id] = lane_index   
-                         
-            EnvInfo_is_turnable = np.zeros((3, 1))
-            if lane_index - 1 in masked_all_lane_indeces and lane_index > 0: 
-                EnvInfo_is_turnable[0] = 1.0
-                st[0] = np.where(masked_all_lane_indeces == lane_index-1)[0][0].item()
-            if lane_index + 1 in masked_all_lane_indeces: 
-                EnvInfo_is_turnable[2] = 1.0
-                st[2] = np.where(masked_all_lane_indeces == lane_index+1)[0][0].item()
-            EnvInfo_is_turnable[1] = 1.0
-            st[1] = np.where(masked_all_lane_indeces == lane_index)[0][0].item()
-                        
-            if not road_all_wrong:
-                self.last_correct_st[agent_id] = st[1]
             
+            EnvInfo_is_turnable = np.zeros((3, 1))
+            if lane_index-1 in all_lane_indeces: 
+                EnvInfo_is_turnable[0] = 1.0
+                st[0] = np.where(all_lane_indeces == lane_index-1)[0][0].item()
+            if lane_index+1 in all_lane_indeces: 
+                EnvInfo_is_turnable[2] = 1.0
+                st[2] = np.where(all_lane_indeces == lane_index+1)[0][0].item()
+            EnvInfo_is_turnable[1] = 1.0
+            st[1] = np.where(all_lane_indeces == lane_index)[0][0].item()
             speed_limit = all_lane_speed_limit[st[1]]
-            lane_on_heading = all_lane_heading[st[1], 0]
 
             EnvInfo_rel_pos_heading = np.zeros((3, 15))
             EnvInfo_rel_pos_heading_classifier = np.zeros((3, 60))
@@ -302,7 +176,7 @@ class ObsWrapper(gym.ObservationWrapper):
             elif self.target_lane_index[agent_id] > lane_index: EnvInfo_is_target[2] = 1.0
             else : EnvInfo_is_target[1] = 1.0
             
-            EnvInfo_is_goal = self.cal_goal_lane(np_obs, raw_obs, lane_index, masked_all_lane_indeces).reshape(3, 3)
+            EnvInfo_is_goal = self.cal_goal_lane(np_obs, raw_obs, lane_index, all_lane_indeces).reshape(3, 3)
             is_on_goal_lane = EnvInfo_is_goal[1, 1]
             
             EnvInfo_index = np.eye(3).reshape(3, 3)
@@ -329,8 +203,27 @@ class ObsWrapper(gym.ObservationWrapper):
             
             # Neighbor Info
             
-            (NeighborInfo_rel_pos, NeighborInfo_rel_vel, NeighborInfo_rel_heading) = \
-                self.get_np_neighbor_info(raw_obs, pos, speed, heading, rotate_M)
+            neighbors_pos = np_obs["neighbors"]["pos"][:, :2]
+            neighbors_speed = np_obs["neighbors"]["speed"]
+            neighbors_heading = np_obs["neighbors"]["heading"]
+            
+            neighbors_rel_vel = np.empty((10, 2))
+            neighbors_rel_vel[:, 0] = -np.sin(neighbors_heading) * neighbors_speed + np.sin(heading) * speed
+            neighbors_rel_vel[:, 1] = np.cos(neighbors_heading) * neighbors_speed - np.cos(heading) * speed
+            
+            nb_mask = np.all(neighbors_pos == 0, -1).reshape(10, 1).astype(np.float32)
+            neighbors_pos += nb_mask * 200.0
+            
+            neighbors_dist = np.sqrt(((neighbors_pos - pos)**2).sum(-1))
+            st = np.argsort(neighbors_dist)[:5]
+            
+            NeighborInfo_rel_pos = ((neighbors_pos[st] - pos) @ rotate_M.T)
+            NeighborInfo_rel_vel = ((neighbors_rel_vel[st]) @ rotate_M.T)
+            NeighborInfo_rel_heading = (neighbors_heading - heading)[st].reshape(5, 1)
+            NeighborInfo_rel_heading[np.where(NeighborInfo_rel_heading >  np.pi)] -= np.pi
+            NeighborInfo_rel_heading[np.where(NeighborInfo_rel_heading < -np.pi)] += np.pi
+            # NeighborInfo_boundingbox = np_obs["neighbors"]["box"][st, :2]
+            
             NeighborInfo = np.concatenate([
                 NeighborInfo_rel_pos,       # 2
                 NeighborInfo_rel_vel,       # 2
@@ -364,21 +257,13 @@ class ObsWrapper(gym.ObservationWrapper):
                 is_turnable = EnvInfo_is_turnable,
                 goal_lane = EnvInfo_is_goal[1, :],
                 wrapped_obs = wrapped_obs[agent_id],
-                all_road_indeces=all_road_indeces,
-                masked_all_lane_indeces=masked_all_lane_indeces,
-                road_all_wrong = road_all_wrong,
-                lane_on_heading = lane_on_heading,
-                distance_to_goal = distance_to_goal,
             )
             
             wrapped_obs[agent_id] = np.concatenate([
                 wrapped_obs[agent_id],
                 self.preserved_info[agent_id].classifier_input
             ], -1)
-           
-        # ! LOG
-        if success_flag: print("[INFO] Success")
-        if collision_flag: print("[INFO] Collision")
+            
         return wrapped_obs
 
 class EnvWrapper(gym.Wrapper):
@@ -402,40 +287,19 @@ class EnvWrapper(gym.Wrapper):
         neighbor_y = o[np.arange(5)*3+1]
         neighbor_h = o[np.arange(5)*3+4]
         
-        neighbor_vx = o[np.arange(5)*3+2]
-        neighbor_vy = o[np.arange(5)*3+3]
-        neighbor_v = np.sqrt(neighbor_vx**2+neighbor_vy**2)
-        
         for i in range(5):
             if turn_left:
                 if  (neighbor_x[i] < -1.6 and neighbor_x[i] > -4.0) and \
-                    ((neighbor_y[i] <  0.0 and neighbor_y[i] > min(-9.0, -1.5*neighbor_v[i].item())) or \
-                    (neighbor_y[i] >  0.0 and neighbor_y[i] <  6.0)) and \
+                    (abs(neighbor_y)[i] < 3.8) and \
                     (neighbor_h[i] < 0.05):
                         return False
             else:
-                if  (neighbor_x[i] >  1.6 and neighbor_x[i] <  4.0) and \
-                    ((neighbor_y[i] <  0.0 and neighbor_y[i] > min(-9.0, -1.5*neighbor_v[i].item())) or \
-                    (neighbor_y[i] >  0.0 and neighbor_y[i] <  6.0)) and \
+                if  (neighbor_x[i] > 1.6 and neighbor_x[i] < 4.0) and \
+                    (abs(neighbor_y)[i] < 3.8) and \
                     (neighbor_h[i] < 0.05):
                         return False
         else:
             return True
-        
-    def is_parallel(self, agent_id: str):
-        o = self.env.preserved_info[agent_id].wrapped_obs
-        neighbor_x = o[np.arange(5)*3]
-        neighbor_y = o[np.arange(5)*3+1]
-        neighbor_h = o[np.arange(5)*3+4]
-
-        for i in range(5):
-            if  (neighbor_x[i] < -1.6 and neighbor_x[i] > -4.0) and \
-                ((neighbor_y[i] < 0.0 and neighbor_y[i] > -2.0) or \
-                (neighbor_y[i] > 0.0 and neighbor_y[i] < 2.0)) and \
-                (neighbor_h[i] < 0.05):
-                    return True
-        else:
-            return False
         
     def collision_forecast(self, vehicle_state1, vehicle_state2, l_front=5, l_back=0, w_left=1.25, w_right=1.25, steps=5):
         v1, v2 = vehicle_state1.speed, vehicle_state2.speed
@@ -511,7 +375,7 @@ class EnvWrapper(gym.Wrapper):
         for agent_id in self.agents_id:
 
             raw_obs = self.env.preserved_info[agent_id].raw_obs
-            all_lane_indeces = self.env.preserved_info[agent_id].masked_all_lane_indeces
+            all_lane_indeces = self.env.preserved_info[agent_id].all_lane_indeces
             
             target_wps = self.env.preserved_info[agent_id].target_wps
             exp_speed = min(self.env.preserved_info[agent_id].speed_limit, 13.88)
@@ -520,24 +384,6 @@ class EnvWrapper(gym.Wrapper):
             heading = raw_obs.ego_vehicle_state.heading - 0.0
             acc = 0
         
-        # ? Rule-based keep correct lane 0
-            use_preserved_target_wp = False
-            if self.env.preserved_info[agent_id].road_all_wrong and agent_id in self.env.last_correct_wp_pos.keys():
-                last_correct_wp_pos = self.env.last_correct_wp_pos[agent_id]
-                pos_now = self.env.preserved_info[agent_id].np_obs["ego"]["pos"][:2].reshape(1,1,-1)
-                st = [0, 0]
-                dist_to_pos_now = ((pos_now - last_correct_wp_pos)**2).sum(-1)
-                st[0] = self.env.last_correct_st[agent_id]
-                st[1] = dist_to_pos_now[st[0]].argmin()
-                target_wp = last_correct_wp_pos[st[0]][st[1]+1 : st[1]+4]
-                if target_wp.shape[0] == 0:
-                    # ! LOG
-                    print("[INFO] No useful preserved waypoints exist.")
-                    pass # ! BAI LAN
-                else:
-                    target_wp = target_wp.mean(0)
-                    use_preserved_target_wp = True
-                    
             # ? Rule-based stopping condition 1
             dist_min = 2
             collision_r = self.cal_collision_r(raw_obs.ego_vehicle_state.bounding_box)
@@ -564,36 +410,20 @@ class EnvWrapper(gym.Wrapper):
                 if self.collision_forecast(ego, neighbor):
                     self._rule_stop_cnt += 1
                     if self._rule_stop_cnt >= 5:
-                        if self._rule_stop_cnt >= 8: self._rule_stop_cnt = 0
+                        self._rule_stop_cnt = 0
                         break
                     if action[agent_id] not in [10]:
                         exp_speed = 0.0
                         acc = 1.2
                     break
             # ? Rule-based lane changing condition 3
-            # ! Turn off when training
             else:
-                self._rule_stop_cnt = 0
                 goal_lane = self.env.preserved_info[agent_id].goal_lane
-                if self.env.preserved_info[agent_id].lane_index == self.env.target_lane_index[agent_id] and \
-                    abs(heading - self.env.preserved_info[agent_id].lane_on_heading) < 0.05:                    
-                    if action[agent_id] in [7, 8, 9]:
-                        if goal_lane[2] and self.is_in_safe_box(agent_id, True): action[agent_id] = 2
-                        elif goal_lane[0] and self.is_in_safe_box(agent_id, False): action[agent_id] = 5
-                    elif action[agent_id] in [0, 1, 2]:
-                        if not self.is_in_safe_box(agent_id, True): action[agent_id] += 7
-                    elif action[agent_id] in [3, 4, 5]:
-                        if not self.is_in_safe_box(agent_id, False): action[agent_id] += 4
-                distance_to_goal = self.env.preserved_info[agent_id].distance_to_goal
-                if not goal_lane[1] and distance_to_goal < 100 and distance_to_goal > 0 and action[agent_id] in [7,8,9]:
-                    exp_speed *= distance_to_goal / 100.0
+                if self.env.preserved_info[agent_id].lane_index == self.env.target_lane_index[agent_id] \
+                    and action[agent_id] in [7, 8, 9]:
+                    if goal_lane[2] and self.is_in_safe_box(agent_id, True): action[agent_id] = 2
+                    elif goal_lane[0] and self.is_in_safe_box(agent_id, False): action[agent_id] = 5
             
-            # ? Rule-based slow down 4
-            if self.is_parallel(agent_id): 
-                exp_speed *= 0.6
-                # print(f'{agent_id} slow down')
-                    
-            if use_preserved_target_wp: action[agent_id] = 8
             # keep_lane
             if action[agent_id] in [6, 7, 8, 9, 10]:
                 exp_speed *= [0.0, 0.4, 0.7, 1.0, -0.2][action[agent_id] - 6]
@@ -601,21 +431,17 @@ class EnvWrapper(gym.Wrapper):
             # change_lane_left
             elif action[agent_id] in [0, 1, 2]:
                 exp_speed *= [0.4, 0.7, 1.0][action[agent_id] - 0]
-                if self.env.target_lane_index[agent_id]+1 in all_lane_indeces and \
-                    abs(heading - self.env.preserved_info[agent_id].lane_on_heading) < 0.05:
+                if self.env.target_lane_index[agent_id] < all_lane_indeces.max():
                     self.env.target_lane_index[agent_id] += 1
             
             # change_lane_right
             elif action[agent_id] in [3, 4, 5]:
                 exp_speed *= [0.4, 0.7, 1.0][action[agent_id] - 3]
-                if self.env.target_lane_index[agent_id]>0 and \
-                    self.env.target_lane_index[agent_id]-1 in all_lane_indeces and \
-                        abs(heading - self.env.preserved_info[agent_id].lane_on_heading) < 0.05:
+                if self.env.target_lane_index[agent_id] > 0:
                     self.env.target_lane_index[agent_id] -= 1
                     
-            if not use_preserved_target_wp:
-                st = np.where(all_lane_indeces == self.env.target_lane_index[agent_id])[0][0].item()
-                target_wp = target_wps[st][:2]
+            st = np.where(all_lane_indeces == self.env.target_lane_index[agent_id])[0][0].item()
+            target_wp = target_wps[st][:2]
             
             delta_pos = target_wp - pos
             delta_pos_dist = self.cal_distance(target_wp, pos)
@@ -637,5 +463,3 @@ class EnvWrapper(gym.Wrapper):
         
         return wrapped_act
     
-
-
