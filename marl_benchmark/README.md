@@ -1,6 +1,6 @@
 # Multi-Agent Benchmarks
 
-This directory contains the scenarios, training environment, and agents used in the CoRL20 paper: [SMARTS: Scalable Multi-Agent ReinforcementLearning Training School for Autonomous Driving](...).
+This directory contains the scenarios, training environment, and agents used in the CoRL20 paper: [SMARTS: Scalable Multi-Agent ReinforcementLearning Training School for Autonomous Driving](https://arxiv.org/abs/2010.09776).
 
 **Contents,**
 - `agents/`: YAML files and some RLlib-based policy implementations
