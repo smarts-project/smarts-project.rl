@@ -1,2 +1,3 @@
 .venv/
 marl_benchmark/log/
+*.egg-info/
