@@ -15,7 +15,6 @@ This directory contains the scenarios, training environment, and agents used in 
 ## Setup
 ```bash
 # git clone ...
-cd <projec/baseline/marl_benchmark>
 
 # setup virtual environment; presently at least Python 3.8 and higher is officially supported
 python3.8 -m venv .venv
@@ -26,20 +25,15 @@ source .venv/bin/activate
 # upgrade pip, a recent version of pip is needed for the version of tensorflow we depend on
 pip install --upgrade pip
 
-# install the current version of python package with the rllib dependencies
-pip install -e .
-
-## Running
-
-If you have not already, it is suggested you checkout the benchmark branch.
-```bash
-$ git checkout marl_benchmark
+# install the current version of python package over the old requirements
+#   If you choose not to use the requirements.txt you will need to resolve the dependencies manually
+pip install -r requirements.txt && pip install -e .
 ```
 
 To run the training procedure,
 
 ```bash
-# from baselines/marl_benchmark/
+# from marl_benchmark/marl_benchmark
 $ python3.8 run.py <scenario> -f <config_file>
 # E.x. python3.8 run.py scenarios/sumo/intersections/4lane -f agents/ppo/baseline-lane-control.yaml
 ```
@@ -47,7 +41,7 @@ $ python3.8 run.py <scenario> -f <config_file>
 To run the evaluation procedure for multiple algorithms,
 
 ```bash
-# from baselines/marl_benchmark/
+# from marl_benchmark/marl_benchmark
 $ python evaluate.py <scenario> -f <config_files>
 # E.x. python3.8  evaluate.py scenarios/sumo/intersections/4lane \
 #          -f agents/ppo/baseline-lane-control.yaml \
