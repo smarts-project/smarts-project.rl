@@ -22,15 +22,14 @@ from collections import OrderedDict
 from typing import Dict, List, Tuple
 
 import numpy as np
-import tensorflow as tf1
 from ray.rllib.evaluation.postprocessing import compute_advantages
 from ray.rllib.policy.sample_batch import SampleBatch
 from ray.rllib.policy.tf_policy import TFPolicy
 from ray.rllib.utils.framework import try_import_tf
 from ray.rllib.utils.tf_run_builder import TFRunBuilder
-from ray.rllib.utils.types import ModelGradients, TensorType
+from ray.rllib.utils.typing import ModelGradients, TensorType
 
-_, tf, tf_version = try_import_tf()
+tf1, tf, tfv = try_import_tf()
 
 
 SampleBatch.OTHER_VARIABLES = None
@@ -173,7 +172,7 @@ def postprocess_trajectory(
 
             # pack other_gradients / other_vars as ndarray objects
         for name, grad_nested_list in other_gradients.items():
-            assert len(other_vars[name]) > 0, name
+            assert len(other_vars[name]) > 0, f"{other_vars} and {name}"
             assert len(grad_nested_list) > 0, name
             var_nested = np.sum(other_vars[name], axis=0)
             grad_nested = np.sum(grad_nested_list, axis=0)

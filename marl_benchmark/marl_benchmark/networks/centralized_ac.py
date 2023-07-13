@@ -18,7 +18,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 from collections import OrderedDict
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import numpy as np
 import tensorflow as tf
@@ -30,7 +30,7 @@ from ray.rllib.models.tf.misc import normc_initializer
 from ray.rllib.models.tf.tf_modelv2 import TFModelV2
 from ray.rllib.utils.annotations import override
 from ray.rllib.utils.framework import get_activation_fn, try_import_tf
-from ray.rllib.utils.types import ModelConfigDict, TensorType
+from ray.rllib.utils.typing import ModelConfigDict, TensorType
 
 tf1, tf, tf_version = try_import_tf()
 
@@ -145,7 +145,7 @@ class CentralizedActorCriticModel(TFModelV2):
         input_dict: Dict[str, TensorType],
         state: List[TensorType],
         seq_lens: TensorType,
-    ) -> (TensorType, List[TensorType]):
+    ) -> Tuple[TensorType, List[TensorType]]:
         # obs = self.obs_preprocessor.transform(input_dict["obs"])
         logits_out = self.action_model(input_dict["obs_flat"])
         return logits_out, state
