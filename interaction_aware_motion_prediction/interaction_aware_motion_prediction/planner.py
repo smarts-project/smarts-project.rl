@@ -27,7 +27,7 @@ class Planner(object):
         if hasattr(self.ego_state.mission.goal, "position"):
             goal = np.array(self.ego_state.mission.goal.position)
         else:
-            goal = self.ego_state.position
+            goal = np.array(self.ego_state.position)
         self.routes = []
         self.speed_limit = paths[0][0].speed_limit
 
@@ -64,7 +64,7 @@ class Planner(object):
 
         self.target_route = np.min(
             [
-                np.min(np.linalg.norm(route[:, :2] - goal[None, :2], axis=-1))
+                np.min(np.linalg.norm(np.subtract(route[:, :2], goal[None, :2]), axis=-1))
                 for route in self.routes
             ]
         )
@@ -242,7 +242,7 @@ class Planner(object):
             (
                 target_traj.x[t],  # target global x
                 target_traj.y[t],  # target global y
-                constrain_angle(target_traj.yaw[t] - math.pi / 2),  # target heading
+                max(-np.pi, min(np.pi, constrain_angle(target_traj.yaw[t] - math.pi / 2))),  # target heading
                 0.1,
             )
             for t in range(len(target_traj.x))
@@ -261,8 +261,8 @@ class Planner(object):
         if hasattr(self.ego_state.mission.goal, "position"):
             goal = np.array(self.ego_state.mission.goal.position)
         else:
-            goal = self.ego_state.position
-        route_to_goal = np.linalg.norm(route[:, :2] - goal[None, :2], axis=-1)
+            goal = np.array(self.ego_state.position)
+        route_to_goal = np.linalg.norm(np.subtract(route[:, :2], goal[None, :2]), axis=-1)
         dist_to_goal = np.min(route_to_goal) - self.target_route
 
         return dist_to_goal
@@ -324,7 +324,7 @@ class Planner(object):
 
     @staticmethod
     def project_to_frenet(cartesian_pos, path):
-        distance_to_ref = np.linalg.norm(cartesian_pos[None, :] - path[:, :2], axis=-1)
+        distance_to_ref = np.linalg.norm(np.subtract(cartesian_pos[None, :], path[:, :2]), axis=-1)
         k = np.argmin(distance_to_ref)
 
         if k == 0 or k == path.shape[0] - 1:
@@ -333,8 +333,8 @@ class Planner(object):
         s = 0.1 * k
         r = path[k]
 
-        dx = cartesian_pos[0] - r[0]
-        dy = cartesian_pos[1] - r[1]
+        dx = np.subtract(cartesian_pos[0], r[0])
+        dy = np.subtract(cartesian_pos[1], r[1])
         cross_rd_nd = np.cos(r[2]) * dy - np.sin(r[2]) * dx
         d = np.sign(cross_rd_nd) * np.sqrt(dx**2 + dy**2)
 
@@ -360,7 +360,7 @@ class Planner(object):
 
     @staticmethod
     def ego_frame_dynamics(v, theta):
-        ego_v = v.copy()
+        ego_v = np.array(v)
         ego_v[0] = v[0] * np.cos(theta) + v[1] * np.sin(theta)
         ego_v[1] = v[1] * np.cos(theta) - v[0] * np.sin(theta)
 

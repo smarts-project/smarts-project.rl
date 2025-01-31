@@ -182,12 +182,12 @@ def _std_ego_vehicle_state(
 ) -> Dict[str, Union[np.int8, np.float32, np.ndarray]]:
 
     std_ego = {
-        "angular_velocity": val.angular_velocity.astype(np.float32),
+        "angular_velocity": np.array(val.angular_velocity).astype(np.float32),
         "box": np.array(val.bounding_box.as_lwh).astype(np.float32),
         "heading": np.float32(val.heading),
         "lane_index": np.int8(val.lane_index),
-        "linear_velocity": val.linear_velocity.astype(np.float32),
-        "pos": val.position.astype(np.float64),
+        "linear_velocity": np.array(val.linear_velocity).astype(np.float32),
+        "pos": np.array(val.position).astype(np.float64),
         "speed": np.float32(val.speed),
         "steering": np.float32(val.steering),
         "yaw_rate": np.float32(val.yaw_rate) if val.yaw_rate else np.float32(0),
@@ -196,10 +196,10 @@ def _std_ego_vehicle_state(
     if accelerometer:
         std_ego.update(
             {
-                "angular_acceleration": val.angular_acceleration.astype(np.float32),
-                "angular_jerk": val.angular_jerk.astype(np.float32),
-                "linear_acceleration": val.linear_acceleration.astype(np.float32),
-                "linear_jerk": val.linear_jerk.astype(np.float32),
+                "angular_acceleration": np.array(val.angular_acceleration).astype(np.float32),
+                "angular_jerk": np.array(val.angular_jerk).astype(np.float32),
+                "linear_acceleration": np.array(val.linear_acceleration).astype(np.float32),
+                "linear_jerk": np.array(val.linear_jerk).astype(np.float32),
             }
         )
 

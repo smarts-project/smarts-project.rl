@@ -34,7 +34,7 @@ def collision_forecast(
     v1_vec, v2_vec = v1 * np.array([math.cos(theta1), math.sin(theta1)]), v2 * np.array(
         [math.cos(theta2), math.sin(theta2)]
     )
-    init_pos1, init_pos2 = vehicle_state1.position[:2], vehicle_state2.position[:2]
+    init_pos1, init_pos2 = np.array(vehicle_state1.position[:2]), np.array(vehicle_state2.position[:2])
     bound1, bound2 = vehicle_state1.bounding_box, vehicle_state2.bounding_box
     # l1, w1, l2, w2 = bound1.length, bound1.width, bound2.length, bound2.width
     l1, w1, l2, w2 = bound1.length, bound1.width, bound2.length, bound2.width
@@ -172,7 +172,7 @@ class EnvWrapper:
     @property
     def goal_position(self):
         if hasattr(self.raw_obs.ego_vehicle_state.mission.goal, "position"):
-            return self.raw_obs.ego_vehicle_state.mission.goal.position[:2]
+            return np.array(self.raw_obs.ego_vehicle_state.mission.goal.position[:2])
         else:
             position = self.raw_obs.ego_vehicle_state.position[:2]
             return np.ones((2,), dtype=np.float32) * self._PERCEIVE_RANGE + position
@@ -205,7 +205,7 @@ class EnvWrapper:
         return goal_lane
 
     def cal_distance(self, pos1, pos2):
-        return np.linalg.norm(pos1 - pos2)
+        return np.linalg.norm(np.subtract(pos1, pos2))
 
     def cal_collision_r(self, bounding_box):
         return np.linalg.norm([bounding_box.length, bounding_box.width])
@@ -296,7 +296,7 @@ class EnvWrapper:
         theta1 = ego_lane_heading + math.pi / 2  # 逆行时会有问题
         v1_vec = v1 * np.array([math.cos(theta1), math.sin(theta1)])
 
-        init_pos1 = vehicle_state1.position[:2]
+        init_pos1 = np.array(vehicle_state1.position[:2])
         bound1 = vehicle_state1.bounding_box
         l1, w1 = bound1.length, bound1.width
         l1_front_vec, l1_back_vec = (l1 / 2 + l_front) * np.array(
@@ -330,7 +330,7 @@ class EnvWrapper:
                 v2 = nb.speed
                 theta2 = nb.heading + math.pi / 2
                 v2_vec = v2 * np.array([math.cos(theta2), math.sin(theta2)])
-                init_pos2 = nb.position[:2]
+                init_pos2 = np.array(nb.position[:2])
                 bound2 = nb.bounding_box
                 l2, w2 = bound2.length, bound2.width
                 l2_vec = l2 / 2 * np.array([math.cos(theta2), math.sin(theta2)])
@@ -370,7 +370,7 @@ class EnvWrapper:
         self.ego_last_pos = self.ego_current_pos
         self.ego_current_pos = self.raw_obs.ego_vehicle_state.position[:2]
         if self.ego_last_pos is not None:
-            if np.linalg.norm(self.ego_last_pos - self.ego_current_pos) < 0.01:
+            if np.linalg.norm(np.subtract(self.ego_last_pos, self.ego_current_pos)) < 0.01:
                 self.static_at_end_cnt += 1
             else:
                 self.static_at_end_cnt = 0
@@ -405,7 +405,7 @@ class EnvWrapper:
             if nb.id[:5] == "Agent":
                 self.other_agent_nearby = True
                 break
-        position = raw_obs.ego_vehicle_state.position[:2].copy()
+        position = raw_obs.ego_vehicle_state.position[:2]
         heading = raw_obs.ego_vehicle_state.heading
         lane_id = raw_obs.ego_vehicle_state.lane_id
 
@@ -419,16 +419,16 @@ class EnvWrapper:
 
                 for path in raw_obs.waypoint_paths:
                     if len(path) > 3:
-                        last_dist_to_goal = np.linalg.norm(path[0].pos - goal_pos)
+                        last_dist_to_goal = np.linalg.norm(np.subtract(path[0].pos, goal_pos))
                         last_wp = path[0]
                         for wp_ind, wp in enumerate(path):
                             if (
                                 wp_ind % 3 == 0
                                 and wp_ind > 0
-                                and np.linalg.norm(wp.pos - last_wp.pos)
+                                and np.linalg.norm(np.subtract(wp.pos, last_wp.pos))
                             ):
                                 dist_to_goal = np.linalg.norm(
-                                    path[wp_ind].pos - goal_pos
+                                    np.subtract(path[wp_ind].pos, goal_pos)
                                 )
                                 if dist_to_goal > last_dist_to_goal + 0.01:
                                     # logger.debug(f'find wrong lane:{path[0].lane_id}, {path[0].lane_index}')
@@ -516,7 +516,7 @@ class EnvWrapper:
         vel_atten_rate = 1.0
         detection_radius = 20
         for neighbor in raw_obs.neighborhood_vehicle_states:
-            if np.linalg.norm(neighbor.position[:2] - position) < detection_radius:
+            if np.linalg.norm(np.subtract(neighbor.position[:2], position)) < detection_radius:
                 vel_atten_rate -= 0.02
         vel_atten_rate = max(vel_atten_rate, 0.5)
         # logger.debug('atten rate:', vel_atten_rate)
@@ -556,7 +556,7 @@ class EnvWrapper:
                         path = raw_obs.waypoint_paths[lane_idx_in_list]
                         max_dh_end = max(max_dh_end, max(abs_dheadings[-10:]))
                         max_dist_to_ego = max(
-                            max_dist_to_ego, np.linalg.norm(ego_pos - path[0].pos)
+                            max_dist_to_ego, np.linalg.norm(np.subtract(ego_pos - path[0].pos))
                         )
                         lane_end_pos.append(path[-1].pos)
 
@@ -595,7 +595,7 @@ class EnvWrapper:
                         curr_pos = raw_obs.ego_vehicle_state.position[:2]
                         for nb in raw_obs.neighborhood_vehicle_states:
                             if (
-                                np.linalg.norm(curr_pos - nb.position[:2])
+                                np.linalg.norm(np.subtract(curr_pos - nb.position[:2]))
                                 and nb.lane_id not in reachable_lane_ids
                             ):
                                 if nb.id[:5] != "Agent":
@@ -649,7 +649,7 @@ class EnvWrapper:
                         math.pi * 2 - abs(nb.heading - ego.heading),
                         abs(nb.heading - ego.heading),
                     )
-                    tmp_dist = np.linalg.norm(nb.position[:2] - ego.position[:2])
+                    tmp_dist = np.linalg.norm(np.subtract(nb.position[:2] - ego.position[:2]))
                     if (
                         nb.lane_index == ego.lane_index
                         and tmp_dist < 10
@@ -684,7 +684,7 @@ class EnvWrapper:
                         # logger.debug(f'wrong lane index {wp.lane_index} and {self.lane_index}')
                         continue
                     if (
-                        np.linalg.norm(wp.pos - curr_pos)
+                        np.linalg.norm(np.subtract(wp.pos, curr_pos))
                         >= [2 + 2, 10 + 2][abs(wp.lane_index - self.lane_index)]
                     ):
                         reachable_lane_ids.add(wp.lane_id)
@@ -815,7 +815,7 @@ class EnvWrapper:
                             ):
                                 continue
                         ego_to_nb_pos_vec = (
-                            nb.position[:2] - raw_obs.ego_vehicle_state.position[:2]
+                            np.subtract(nb.position[:2], raw_obs.ego_vehicle_state.position[:2])
                         )
                         ego_heading_x = (
                             float(raw_obs.ego_vehicle_state.heading) + math.pi / 2
@@ -850,7 +850,7 @@ class EnvWrapper:
                     if neighbor.id in last_blocking_car_ids:
                         continue  # 不再重复检测key neighbor
                     ego_to_nb_pos_vec = (
-                        neighbor.position[:2] - raw_obs.ego_vehicle_state.position[:2]
+                        np.subtract(neighbor.position[:2], raw_obs.ego_vehicle_state.position[:2])
                     )
                     ego_heading_x = (
                         float(raw_obs.ego_vehicle_state.heading) + math.pi / 2
@@ -914,7 +914,7 @@ class EnvWrapper:
         else:
             for neighbor in raw_obs.neighborhood_vehicle_states:
                 ego_to_nb_pos_vec = (
-                    neighbor.position[:2] - raw_obs.ego_vehicle_state.position[:2]
+                    np.subtract(neighbor.position[:2], raw_obs.ego_vehicle_state.position[:2])
                 )
                 ego_heading_x = float(raw_obs.ego_vehicle_state.heading) + math.pi / 2
                 heading_vec = np.array(
@@ -969,7 +969,7 @@ class EnvWrapper:
                 raw_obs.waypoint_paths[self.lane_index][0].heading + math.pi / 2
             )  # 将极轴由y正半轴调整为x正半轴
             lane_vec = np.array([math.cos(lane_heading), math.sin(lane_heading)])
-            rela_pos_vec = neighbor_pos - curr_wp_pos
+            rela_pos_vec = np.subtract(neighbor_pos, curr_wp_pos)
             cos_rela_pos_angle = np.dot(rela_pos_vec, lane_vec) / np.linalg.norm(
                 rela_pos_vec
             )  # 相邻车辆与车道方向的夹角余弦值
@@ -1038,7 +1038,7 @@ class EnvWrapper:
                 len(ego_path) == 1
                 and self.ego_last_pos is not None
                 and np.linalg.norm(
-                    self.raw_obs.ego_vehicle_state.position[:2] - self.ego_last_pos
+                    np.subtract(self.raw_obs.ego_vehicle_state.position[:2], self.ego_last_pos)
                 )
                 < 0.1
             ):
@@ -1055,8 +1055,7 @@ class EnvWrapper:
                     self.find_goal = True
                     logger.debug(f"looking for target at {raw_obs.elapsed_sim_time}")
                 goal_pos = raw_obs.ego_vehicle_state.mission.goal.position[:2]
-                goal_pos = np.array(goal_pos)
-                dist_to_goal = np.linalg.norm(goal_pos - curr_pos)
+                dist_to_goal = np.linalg.norm(np.subtract(goal_pos, curr_pos))
                 lane_index_of_goal, lane_id_of_goal = None, None
                 if dist_to_goal < change_to_goal_lane_dist_threshold:
                     self.near_goal = True
@@ -1082,13 +1081,13 @@ class EnvWrapper:
                             len(lane) - 1
                         ):  # goal在车道上的投影位于2点之间，且到车道中心的距离小于width/2
                             wp1, wp2 = lane[wp_idx].pos, lane[wp_idx + 1].pos
-                            vec1 = wp1 - goal_pos
-                            vec2 = wp2 - goal_pos
-                            lane_vec = wp1 - wp2
+                            vec1 = np.subtract(wp1, goal_pos)
+                            vec2 = np.subtract(wp2, goal_pos)
+                            lane_vec = np.subtract(wp1, wp2)
                             distance_to_lane = np.abs(
                                 np.cross(vec1, vec2)
                             ) / np.linalg.norm(
-                                wp1 - wp2
+                                np.subtract(wp1, wp2)
                             )  # 近似地计算goal到车道中心线的距离
                             is_goal_between_2wps = (
                                 np.dot(vec1, lane_vec) * np.dot(vec2, lane_vec) <= 0
@@ -1266,14 +1265,14 @@ class EnvWrapper:
             if self.merge_tag and self.changing_lane_while_merging:
                 if (
                     np.linalg.norm(
-                        target_wp.pos - raw_obs.ego_vehicle_state.position[:2]
+                        np.subtract(target_wp.pos, raw_obs.ego_vehicle_state.position[:2])
                     )
                     < 0.5
                 ):  # 避免agent原地不动
                     for wp_ind, wp in enumerate(target_path):
                         if (
                             np.linalg.norm(
-                                wp.pos - raw_obs.ego_vehicle_state.position[:2]
+                                np.subtract(wp.pos, raw_obs.ego_vehicle_state.position[:2])
                             )
                             >= 0.5
                         ):
@@ -1314,7 +1313,7 @@ class EnvWrapper:
                 target_lane_index = None
             for neighbor in raw_obs.neighborhood_vehicle_states:
                 ego_to_nb_pos_vec = (
-                    neighbor.position[:2] - raw_obs.ego_vehicle_state.position[:2]
+                    np.subtract(neighbor.position[:2], raw_obs.ego_vehicle_state.position[:2])
                 )
                 ego_heading_x = float(raw_obs.ego_vehicle_state.heading) + math.pi / 2
                 heading_vec = np.array(
@@ -1370,7 +1369,7 @@ class EnvWrapper:
                     raw_obs.ego_vehicle_state.mission.goal.position[:2]
                 )
 
-        delta_pos = target_wp_pos - position
+        delta_pos = np.subtract(target_wp_pos, position)
         delta_pos_dist = self.cal_distance(target_wp.pos, position)
 
         max_dheading = 10 * math.pi / 180
@@ -1394,7 +1393,7 @@ class EnvWrapper:
                 heading_vec = np.array(
                     [math.cos(ego_heading_x), math.sin(ego_heading_x)]
                 )
-                position = position + heading_vec * exp_speed * 0.1
+                position = np.add(position, heading_vec) * exp_speed * 0.1
                 heading = raw_obs.ego_vehicle_state.heading
 
         return np.concatenate([position, [heading, 0.1]])
@@ -1422,7 +1421,7 @@ class EnvWrapper:
         # ego_vehicle_state
         current_raw_obs = raw_obs
         state = current_raw_obs.ego_vehicle_state
-        pos = state.position[:2]
+        pos = np.array(state.position[:2])
         heading = float(state.heading)
         speed = state.speed
         lane_index = state.lane_index
@@ -1497,7 +1496,7 @@ class EnvWrapper:
 
         nb_mask = np.all(neighbors_pos == 0, -1).astype(np.float32)
 
-        neighbors_dist = np.sqrt(((neighbors_pos - pos) ** 2).sum(-1)) + nb_mask * 1e5
+        neighbors_dist = np.sqrt(((np.subtract(neighbors_pos, pos)) ** 2).sum(-1)) + nb_mask * 1e5
         st = np.argsort(neighbors_dist)[:5]
 
         NeighborInfo_rel_pos = (neighbors_pos[st] - pos) @ rotate_M.T

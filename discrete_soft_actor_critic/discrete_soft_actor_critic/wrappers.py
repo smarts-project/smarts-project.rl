@@ -109,13 +109,13 @@ class ObsWrapper:
             return goal_lane
         cos_thetas = np.zeros(4)
         for i in range(4):
-            y1 = (
-                np_obs["waypoint_paths"]["pos"][i, 1][:2]
-                - np_obs["waypoint_paths"]["pos"][i, 0][:2]
+            y1 = np.subtract(
+                np_obs["waypoint_paths"]["pos"][i, 1][:2],
+                np_obs["waypoint_paths"]["pos"][i, 0][:2]
             )
-            y2 = (
-                np_obs["mission"]["goal_pos"][:2]
-                - np_obs["waypoint_paths"]["pos"][i, 0][:2]
+            y2 = np.subtract(
+                np_obs["mission"]["goal_pos"][:2],
+                np_obs["waypoint_paths"]["pos"][i, 0][:2]
             )
             if np.linalg.norm(y2) <= 0.2 or np.linalg.norm(y1) <= 0.2:
                 continue
@@ -268,10 +268,10 @@ class ObsWrapper:
         nb_mask = np.all(neighbors_pos == 0, -1).reshape(10, 1).astype(np.float32)
         neighbors_pos += nb_mask * 200.0
 
-        neighbors_dist = np.sqrt(((neighbors_pos - pos) ** 2).sum(-1))
+        neighbors_dist = np.sqrt((np.subtract(neighbors_pos, pos) ** 2).sum(-1))
         st = np.argsort(neighbors_dist)[:5]
 
-        NeighborInfo_rel_pos = (neighbors_pos[st] - pos) @ rotate_M.T
+        NeighborInfo_rel_pos = np.subtract(neighbors_pos[st], pos) @ rotate_M.T
         NeighborInfo_rel_vel = (neighbors_rel_vel[st]) @ rotate_M.T
         NeighborInfo_rel_heading = (neighbors_heading - heading)[st].reshape(5, 1)
         NeighborInfo_rel_heading[np.where(NeighborInfo_rel_heading > np.pi)] -= np.pi
@@ -387,7 +387,7 @@ class EnvWrapper:
         v1_vec, v2_vec = v1 * np.array(
             [math.cos(theta1), math.sin(theta1)]
         ), v2 * np.array([math.cos(theta2), math.sin(theta2)])
-        init_pos1, init_pos2 = vehicle_state1.position[:2], vehicle_state2.position[:2]
+        init_pos1, init_pos2 = np.array(vehicle_state1.position[:2]), np.array(vehicle_state2.position[:2])
         bound1, bound2 = vehicle_state1.bounding_box, vehicle_state2.bounding_box
         # l1, w1, l2, w2 = bound1.length, bound1.width, bound2.length, bound2.width
         l1, w1, l2, w2 = bound1.length, bound1.width, bound2.length, bound2.width
@@ -447,7 +447,7 @@ class EnvWrapper:
         return np.sqrt(bounding_box.length**2 + bounding_box.width**2)
 
     def cal_distance(self, pos1, pos2):
-        return np.sqrt(((pos1 - pos2) ** 2).sum())
+        return np.sqrt((np.subtract(pos1, pos2) ** 2).sum())
 
     def pack_action(self, action):
         raw_obs = self.obs_wrapper.preserved_info.raw_obs
@@ -456,7 +456,7 @@ class EnvWrapper:
         target_wps = self.obs_wrapper.preserved_info.target_wps
         exp_speed = min(self.obs_wrapper.preserved_info.speed_limit, 13.88)
         speed = self.obs_wrapper.preserved_info.speed
-        pos = raw_obs.ego_vehicle_state.position[:2]
+        pos = np.array(raw_obs.ego_vehicle_state.position[:2])
         heading = raw_obs.ego_vehicle_state.heading - 0.0
         acc = 0
 
@@ -531,7 +531,7 @@ class EnvWrapper:
         ].item()
         target_wp = target_wps[st][:2]
 
-        delta_pos = target_wp - pos
+        delta_pos = np.subtract(target_wp, pos)
         delta_pos_dist = self.cal_distance(target_wp, pos)
 
         acc = 0.5 if exp_speed > speed else max(0.8, acc)

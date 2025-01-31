@@ -99,7 +99,7 @@ class observation_adapter(object):
 
         sorted_neighbors = sorted(
             neighbors.items(),
-            key=lambda item: np.linalg.norm(item[1] - self.current_pos[0][:2]),
+            key=lambda item: np.linalg.norm(np.subtract(item[1], self.current_pos[0][:2])),
         )
         sorted_neighbors = sorted_neighbors[: self.num_neighbors]
         neighbor_ids = [neighbor[0] for neighbor in sorted_neighbors]
